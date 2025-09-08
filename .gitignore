@@ -1,0 +1,14 @@
+.DS_Store
+*.local
+
+# Env files
+.env
+.env.local
+.env.*.local
+.env.keys
+.env.prod
+
+# NPM
+node_modules/
+dist/
+output/

@@ -1,0 +1,11 @@
+{
+  "id": "flow-state-obsidian",
+  "name": "Flow State",
+  "version": "0.1.0",
+  "minAppVersion": "1.2.0",
+  "description": "Sync Flow State into your Obsidian vault.",
+  "author": "Flow State",
+  "authorUrl": "https://flowstate.example",
+  "isDesktopOnly": false,
+  "main": "main.js"
+}
