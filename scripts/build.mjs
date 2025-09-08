@@ -56,8 +56,12 @@ const define = {
 };
 
 const entry = resolve(projectRoot, 'src/main.ts');
-// Emit into dedicated folders so we can install both dev and prod side-by-side
-const outDir = resolve(projectRoot, 'dist', mode === 'prod' ? 'prod' : 'local');
+// Output locations:
+// - prod: emit main.js at project root (next to manifest.json)
+// - local: emit to dist/local/main.js
+const outDir = mode === 'prod'
+  ? resolve(projectRoot, 'dist', 'prod')
+  : resolve(projectRoot, 'dist', 'local');
 mkdirSync(outDir, { recursive: true });
 const outfile = join(outDir, 'main.js');
 
@@ -73,23 +77,30 @@ const common = {
 };
 
 build(common).then(() => {
-  // Copy/transform manifest.json next to the built main.js
+  // Manifest handling:
+  // - prod: manifest already lives at project root next to outfile, no change
+  // - local: write a dev manifest into dist/local with modified id/name
   const manifestSrc = resolve(projectRoot, 'manifest.json');
   const manifestDst = join(outDir, 'manifest.json');
-  if (existsSync(manifestSrc)) {
-    if (mode === 'prod') {
-      copyFileSync(manifestSrc, manifestDst);
-    } else {
-      // local/dev manifest: override id and name so Obsidian treats it as a separate plugin
-      const raw = readFileSync(manifestSrc, 'utf8');
-      const json = JSON.parse(raw);
-      json.id = 'flow-state-obsidian-dev';
-      json.name = 'Flow State (Dev)';
-      // keep all other fields identical
-      const pretty = JSON.stringify(json, null, 2);
-      mkdirSync(outDir, { recursive: true });
-      writeFileSync(manifestDst, pretty);
+  if (existsSync(manifestSrc) && mode == 'prod') {
+    // For prod, also place a copy of manifest.json in dist/prod for easy release uploads
+    copyFileSync(manifestSrc, manifestDst);
+    const versionsSrc = resolve(projectRoot, 'versions.json');
+    const versionsDst = join(outDir, 'versions.json');
+    if (existsSync(versionsSrc)) {
+      copyFileSync(versionsSrc, versionsDst);
     }
+  }
+  if (existsSync(manifestSrc) && mode !== 'prod') {
+    // local/dev manifest: override id and name so Obsidian treats it as a separate plugin
+    const raw = readFileSync(manifestSrc, 'utf8');
+    const json = JSON.parse(raw);
+    json.id = 'flow-state-obsidian-dev';
+    json.name = 'Flow State (Dev)';
+    // keep all other fields identical
+    const pretty = JSON.stringify(json, null, 2);
+    mkdirSync(outDir, { recursive: true });
+    writeFileSync(manifestDst, pretty);
   }
   // Copy sourcemap if present
   const mapSrc = `${outfile}.map`;

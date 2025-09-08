@@ -5,9 +5,8 @@
   "license": "MIT",
   "type": "module",
   "scripts": {
-    "build:local": "node scripts/build.mjs --mode=local",
-    "build:prod": "node scripts/build.mjs --mode=prod",
-    "build": "npm run build:local && npm run build:prod",
+    "build-local": "node scripts/build.mjs --mode=local",
+    "build": "node scripts/build.mjs --mode=prod",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
     "test:watch": "vitest"

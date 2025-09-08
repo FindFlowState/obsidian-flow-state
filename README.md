@@ -1,63 +1,61 @@
-# Flow State Sync (Obsidian Plugin)
+# Flow State (Obsidian Plugin)
 
-Sync Flow State jobs into your Obsidian vault via the Supabase SDK. Polls `jobs` where `status='transcribed'` for routes whose connection `service_type='obsidian'`, writes Markdown to your vault, optionally downloads the original file to the attachments folder, and acknowledges by updating `jobs.status='delivered'`.
+Turn handwritten notes and audio into polished notes in your Obsidian vault. This plugin connects your Flow State account to Obsidian so finished notes are saved exactly where you want them.
 
-## Features (v1)
-- Jobs-based polling with single join query (`jobs -> routes -> connections`).
-- Strict content check: errors if neither `formatted_content` nor `transcribed_text`.
-- Atomic writes, conflict handling (overwrite/append/rename with rename default).
-- Optional original-file download to attachments folder and embedded link.
-- Background polling (desktop default 60s, mobile default 5m), Sync Now command.
+## What it does
+- Pulls completed notes from your Flow State account.
+- Saves new notes or appends to an existing note, based on your project settings.
+- Names files using your Title Template (with a live preview and filename safety).
+- Optionally saves the original file (e.g., image/audio) to your vault’s attachments.
 
-## Install (dev)
-1. Requirements: Node 20+.
-2. From repo root:
-   ```sh
-   cd apps/obsidian_plugin
-   npm install
-   npm run build
-   ```
-3. Copy/symlink this folder into your Obsidian vault's `.obsidian/plugins/flow-state-obsidian` directory.
-4. In Obsidian, enable the plugin.
+## Requirements
+- Obsidian v1.2.0 or newer.
+- A Flow State account.
 
-## Local testing / E2E
+## Install
+You can install from the Obsidian Community Plugins browser once approved. For manual install:
+1. Download the latest release assets: `manifest.json`, `main.js` (and `styles.css` if present).
+2. Place them in your vault at `.obsidian/plugins/flow-state-obsidian/`.
+3. In Obsidian, enable the plugin (Settings → Community plugins).
 
-For a full local pipeline (Supabase + Edge Functions + local Processor + optional Cloudflare Email Worker) and how to exercise sync with this plugin, see the [unified local testing guide](../../scripts/testing/README.md)
+## Connect your account
+1. Open Settings → Community plugins → Flow State.
+2. Enter your email and press Connect to receive a Magic Link.
+3. Click the link to sign in. The plugin will connect your vault to your account.
 
-It covers starting services, running the E2E scripts in writing/audio modes, and how the plugin picks up `transcribed` jobs and writes them into your vault.
+## Projects
+Projects control where and how notes are saved.
+- Destination: choose a vault folder or an existing file to append to.
+- Title Template: use variables like `{{ai_generated_title}}`, `{{date_iso}}`, `{{time_iso}}`, and `{{original_filename}}`.
+- AI Title Suggestion: optionally add an AI-generated title into your template.
+- Instructions: tell the AI how to format or transform your notes.
 
-## Configure
-- Open Settings → Community plugins → Flow State Sync.
-- Set:
-  - Supabase URL and anon key
-  - Destination folder (vault-relative)
-  - Filename template
-  - Conflict strategy
-  - Include original file (optional)
+## Privacy
+- The plugin connects to your Flow State account using Supabase authentication.
+- Only your Flow State outputs (and optionally original files) are written to your vault.
+- No analytics or tracking are included in this plugin.
 
-## How it Works
-- Auth and DB:
-  - Uses Supabase anon key with RLS enforced.
-  - Polls with a single query joining `jobs` to `routes`→`connections` and filtering `service_type='obsidian'`.
-- Content:
-  - Markdown from `jobs.formatted_content` (fallback `transcribed_text`). If neither is present, the sync errors.
-- Original file (optional):
-  - Reads `jobs.metadata.original_object = { bucket, name }` (or parses `original_file_url`).
-  - Downloads via `supabase.storage.from(bucket).download(name)` and writes the binary to the vault’s attachments folder.
-- Acknowledgment:
-  - After a successful write, updates the job row to `status='delivered'` and sets `destination_url` to an Obsidian deep link for the new file.
+## Troubleshooting
+- Destination doesn’t exist: the plugin now creates missing folders/files when saving.
+- Email address for uploads: shown only after a project is created.
+- If you see auth errors, try signing out and connecting again.
 
-## Testing
-- Unit tests (Vitest):
-  ```sh
-  npm test
-  ```
-- The unit tests cover templating utilities and strict content selection. Filesystem-dependent logic is kept minimal and uses Obsidian’s API at runtime.
+## Development
+Build requirements: Node 20+
 
-## Dev Notes
-- The build uses esbuild and marks `obsidian` as external.
-- Background timers are conservative; mobile background execution is OS-limited.
+Commands:
+```sh
+npm install
+# Production bundle (outputs main.js next to manifest.json)
+npm run build
+# Local/dev bundle (outputs to dist/local with a dev manifest)
+npm run build-local
+```
 
-## Release
-- Bump version in `manifest.json` and `package.json`.
-- Rebuild `main.js` and distribute the folder. Provide Supabase config values to testers.
+## Release process
+1. Update versions in `manifest.json`/`package.json`.
+2. `npm run build` to produce `main.js`.
+3. Create a GitHub release and upload: `manifest.json`, `main.js`, and `versions.json`.
+
+## License
+Non-commercial license. See `LICENSE` for details.
