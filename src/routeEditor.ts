@@ -3,7 +3,7 @@ import type FlowStatePlugin from "./main";
 import type { Route } from "@flowstate/supabase-types";
 import { getSupabase, createProject, updateRoute, deleteRoute } from "./supabase";
 import { DEFAULT_INGEST_EMAIL_DOMAIN } from "./config";
-import { ensureFolder, atomicWrite } from "./fs";
+import { ensureFolder, atomicWrite, buildSafeNoteFilename } from "./fs";
 
 // Inline folder typeahead using Obsidian's AbstractInputSuggest
 class FolderInputSuggest extends AbstractInputSuggest<TFolder> {
@@ -273,7 +273,7 @@ export function renderRouteEditor(
   };
 
   // File Saving Options (foldable, only visible when not appending)
-  const titleFold = addFoldableSection(containerEl, "File Saving");
+  const titleFold = addFoldableSection(containerEl, "Save Options");
 
   new Setting(titleFold.body)
     .setName("Include Original")
@@ -296,21 +296,80 @@ export function renderRouteEditor(
       }
       // toggle AI Title Instructions visibility (only when ON)
       if (aiTitleInstrSettingRow) aiTitleInstrSettingRow.style.display = useAiTitle ? "" : "none";
+      // Update preview when toggled
+      if (typeof updateTitlePreview === 'function') updateTitlePreview();
     }));
 
+  // Title template + preview (variables in description, preview below input)
+  let previewTextEl: HTMLSpanElement | null = null;
   const titleSetting = new Setting(titleFold.body)
     .setName("Title Template")
     .setDesc(createFragment((f) => {
-      f.appendText("Template options: ");
-      f.createEl("a", { text: "Template Options", href: "https://example.com/template-options" });
-      f.appendText(".");
+      const vars = f.createEl("div");
+      vars.appendText("Available variables: ");
+      const list = ["{{ai_generated_title}}", "{{date_iso}}", "{{time_iso}}", "{{original_filename}}"];
+      list.forEach((v, i) => {
+        const code = f.createEl("code", { text: v });
+        if (i < list.length - 1) f.appendText("  ");
+      });
     }))
     .addText((t) => {
       t.setValue(titleTemplate)
-       .onChange((v) => titleTemplate = v);
+       .onChange((v) => {
+         // Disallow characters that cannot be used in filenames
+         const sanitized = v.replace(/[\\/:*?"<>|]/g, "");
+         if (sanitized !== v) {
+           t.setValue(sanitized);
+         }
+         titleTemplate = sanitized;
+         if (typeof updateTitlePreview === 'function') updateTitlePreview();
+       });
       t.inputEl.style.width = "100%";
     });
+  // Ensure the control area stacks elements vertically so the preview appears below the input
+  (titleSetting.controlEl as HTMLElement).style.display = "flex";
+  (titleSetting.controlEl as HTMLElement).style.flexDirection = "column";
+  (titleSetting.controlEl as HTMLElement).style.alignItems = "stretch";
+  // Add preview under the text field (same Setting), styled like description
+  {
+    const prev = titleSetting.controlEl.createDiv();
+    // Make the preview take the full row below the input within the flex container
+    prev.style.flexBasis = "100%";
+    prev.style.width = "100%";
+    prev.style.display = "block";
+    prev.style.order = "2";
+    prev.style.alignSelf = "stretch";
+    prev.style.marginTop = "6px";
+    prev.style.fontSize = "var(--font-ui-smaller)";
+    prev.style.color = "var(--text-muted)";
+    prev.appendText("Preview: ");
+    previewTextEl = prev.createEl("span", { text: "" });
+  }
   applyWideControl(titleSetting);
+
+  // Simple template renderer matching common variables used in web app
+  function updateTitlePreview() {
+    const now = new Date();
+    const pad = (n: number) => String(n).padStart(2, "0");
+    const dateIso = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+    const timeIso = `${pad(now.getHours())}:${pad(now.getMinutes())}`;
+    const ctx = {
+      ai_generated_title: "Lecture Notes",
+      date_iso: dateIso,
+      time_iso: timeIso,
+      original_filename: "IMG_1234",
+    } as const;
+    let rendered = titleTemplate || "";
+    rendered = rendered
+      .replace(/\{\{\s*ai_generated_title\s*\}\}/g, ctx.ai_generated_title)
+      .replace(/\{\{\s*date_iso\s*\}\}/g, ctx.date_iso)
+      .replace(/\{\{\s*time_iso\s*\}\}/g, ctx.time_iso)
+      .replace(/\{\{\s*original_filename\s*\}\}/g, ctx.original_filename)
+      .trim();
+    const safe = buildSafeNoteFilename(rendered, 120);
+    if (previewTextEl) previewTextEl.textContent = `${safe}`;
+  }
+  updateTitlePreview();
 
   const updateTitleSectionVisibility = () => {
     // Always show File Saving section, even when appending
@@ -319,7 +378,7 @@ export function renderRouteEditor(
   updateTitleSectionVisibility();
 
   // AI & Instructions (foldable)
-  const aiFold = addFoldableSection(containerEl, "Transcription Instructions");
+  const aiFold = addFoldableSection(containerEl, "Transcription Options");
   const routeInstrSetting = new Setting(aiFold.body)
     .setName("Instructions")
     .setDesc("Optional. Tell the AI how to transcribe your files.")
@@ -346,78 +405,80 @@ export function renderRouteEditor(
     aiTitleInstrSettingRow.style.display = useAiTitle ? "" : "none";
   }
 
-  // Email (foldable) — below File Saving and Transcription Instructions
-  const emailFold = addFoldableSection(containerEl, "Email");
-  // helper text with link
-  const emailHelp = emailFold.body.createDiv();
-  emailHelp.style.fontSize = "0.9em";
-  emailHelp.style.color = "var(--text-muted)";
-  emailHelp.appendText("Send your files to a unique address to auto-create notes in this Project. ");
-  const docLink = emailHelp.createEl("a", { text: "Learn more", href: "https://findflow.ai/help/email" });
+  // Email (foldable) — only shown when editing an existing Project
+  if (existing) {
+    const emailFold = addFoldableSection(containerEl, "Email Options");
+    // helper text with link
+    const emailHelp = emailFold.body.createDiv();
+    emailHelp.style.fontSize = "0.9em";
+    emailHelp.style.color = "var(--text-muted)";
+    emailHelp.appendText("Send your files to a unique address to auto-create notes in this Project. ");
+    const docLink = emailHelp.createEl("a", { text: "Learn more", href: "https://findflow.ai/help/email" });
 
-  // Route Slug (editable)
-  const slugSetting = new Setting(emailFold.body)
-    .setName("Email Slug")
-    .setDesc("Lowercase letters, numbers, and dashes only.")
-    .addText((t) => {
-      t.setValue(slug)
-        .onChange((v) => {
-          slug = slugify(v);
-          t.setValue(slug); // normalize input
-          // live update email field
-          const emailVal = computeEmail();
-          const input = emailSetting.controlEl.querySelector("input") as HTMLInputElement | null;
-          if (input) input.value = emailVal;
-        });
-      t.inputEl.style.width = "100%";
-    });
-  applyWideControl(slugSetting);
+    // Route Slug (editable)
+    const slugSetting = new Setting(emailFold.body)
+      .setName("Email Slug")
+      .setDesc("Lowercase letters, numbers, and dashes only.")
+      .addText((t) => {
+        t.setValue(slug)
+          .onChange((v) => {
+            slug = slugify(v);
+            t.setValue(slug); // normalize input
+            // live update email field
+            const emailVal = computeEmail();
+            const input = emailSetting.controlEl.querySelector("input") as HTMLInputElement | null;
+            if (input) input.value = emailVal;
+          });
+        t.inputEl.style.width = "100%";
+      });
+    applyWideControl(slugSetting);
 
-  // Route Email (read-only with Copy button)
-  const emailSetting = new Setting(emailFold.body)
-    .setName("Project Email")
-    .setDesc(emailDomain ? `Send a file to this email to transcribe and save it using this Project.` : `Email domain not configured.`)
-    .addText((t) => {
-      t.setValue(computeEmail());
-      t.setDisabled(true);
-      t.inputEl.style.width = "100%";
-    });
-  emailSetting.addButton((b) =>
-    b.setButtonText("Copy").onClick(async () => {
+    // Route Email (read-only with Copy button)
+    const emailSetting = new Setting(emailFold.body)
+      .setName("Project Email")
+      .setDesc(emailDomain ? `Send a file to this email to transcribe and save it using this Project.` : `Email domain not configured.`)
+      .addText((t) => {
+        t.setValue(computeEmail());
+        t.setDisabled(true);
+        t.inputEl.style.width = "100%";
+      });
+    emailSetting.addButton((b) =>
+      b.setButtonText("Copy").onClick(async () => {
+        try {
+          await navigator.clipboard.writeText(computeEmail());
+          new Notice("Email copied");
+        } catch {
+          new Notice("Unable to copy");
+        }
+      })
+    );
+    applyWideControl(emailSetting);
+
+    // Fetch user handle asynchronously and update the email preview
+    (async () => {
       try {
-        await navigator.clipboard.writeText(computeEmail());
-        new Notice("Email copied");
-      } catch {
-        new Notice("Unable to copy");
+        const supabase = getSupabase(plugin.settings);
+        const { data, error } = await supabase.auth.getUser();
+        if (error) throw error;
+        const uid = data.user?.id;
+        if (!uid) return;
+        const { data: userRow, error: uErr } = await supabase
+          .from("users")
+          .select("handle")
+          .eq("id", uid)
+          .single();
+        if (uErr) return;
+        const nextHandle = (userRow as any)?.handle ? String((userRow as any).handle) : "";
+        if (nextHandle) {
+          userHandle = normalizeHandle(nextHandle);
+          const input = emailSetting.controlEl.querySelector("input") as HTMLInputElement | null;
+          if (input) input.value = computeEmail();
+        }
+      } catch (e) {
+        // leave empty; user may not be signed in yet
       }
-    })
-  );
-  applyWideControl(emailSetting);
-
-  // Fetch user handle asynchronously and update the email preview
-  (async () => {
-    try {
-      const supabase = getSupabase(plugin.settings);
-      const { data, error } = await supabase.auth.getUser();
-      if (error) throw error;
-      const uid = data.user?.id;
-      if (!uid) return;
-      const { data: userRow, error: uErr } = await supabase
-        .from("users")
-        .select("handle")
-        .eq("id", uid)
-        .single();
-      if (uErr) return;
-      const nextHandle = (userRow as any)?.handle ? String((userRow as any).handle) : "";
-      if (nextHandle) {
-        userHandle = normalizeHandle(nextHandle);
-        const input = emailSetting.controlEl.querySelector("input") as HTMLInputElement | null;
-        if (input) input.value = computeEmail();
-      }
-    } catch (e) {
-      // leave empty; user may not be signed in yet
-    }
-  })();
+    })();
+  }
 
   // Actions
   const actions = containerEl.createDiv({ cls: "modal-button-container" });
@@ -435,30 +496,56 @@ export function renderRouteEditor(
     try {
       if (!name) throw new Error("Name is required");
       if (!destinationFolder) throw new Error("Destination is required");
-      let dest = app.vault.getAbstractFileByPath(destinationFolder);
+      // Normalize append target to a file with .md when appending
+      let normalizedDest = destinationFolder.trim();
+      if (appendToExisting) {
+        if (normalizedDest.endsWith("/")) {
+          // If user provided a folder-like path, create a default file inside it
+          normalizedDest = `${normalizedDest.replace(/\/+$/, "")}/Notes.md`;
+        }
+        if (!/\.md$/i.test(normalizedDest)) {
+          normalizedDest = `${normalizedDest}.md`;
+        }
+      }
+
+      let dest = app.vault.getAbstractFileByPath(normalizedDest);
       if (appendToExisting) {
         if (!(dest instanceof TFile)) {
-          // Auto-create destination file if it does not exist
-          if (destinationFolder.endsWith("/")) {
-            throw new Error("Destination must be a file path (not a folder) when 'Append to existing' is ON");
-          }
-          const parent = destinationFolder.split("/").slice(0, -1).join("/");
+          // Auto-create destination file if it does not exist (with robust retry)
+          const parent = normalizedDest.split("/").slice(0, -1).join("/");
           if (parent) {
-            await ensureFolder(app, parent);
+            try { await ensureFolder(app, parent); } catch {}
           }
-          await atomicWrite(app, destinationFolder, "");
-          dest = app.vault.getAbstractFileByPath(destinationFolder);
+          try {
+            await atomicWrite(app, normalizedDest, "");
+          } catch (e) {
+            // Retry once after ensuring folders again
+            if (parent) {
+              try { await ensureFolder(app, parent); } catch {}
+            }
+            await atomicWrite(app, normalizedDest, "");
+          }
+          dest = app.vault.getAbstractFileByPath(normalizedDest);
           if (!(dest instanceof TFile)) {
             throw new Error("Failed to create destination file. Please check the path and try again.");
           }
+          // Persist normalization back to UI state
+          destinationFolder = normalizedDest;
+          const input = destinationSetting.controlEl.querySelector("input") as HTMLInputElement | null;
+          if (input) input.value = destinationFolder;
         }
       } else {
-        // Auto-create destination folder if it doesn't exist
+        // Auto-create destination folder if it doesn't exist (with robust retry)
         if (!(dest instanceof TFolder)) {
-          await ensureFolder(app, destinationFolder);
-          dest = app.vault.getAbstractFileByPath(destinationFolder);
+          try {
+            await ensureFolder(app, normalizedDest);
+          } catch {
+            // Retry once in case of race conditions or partial paths
+            await ensureFolder(app, normalizedDest);
+          }
+          dest = app.vault.getAbstractFileByPath(normalizedDest);
         }
-        if (!(dest instanceof TFolder)) throw new Error("Destination must be an existing folder when not appending");
+        if (!(dest instanceof TFolder)) throw new Error("Destination must be a folder path");
       }
       if (!appendToExisting && !titleTemplate) throw new Error("Title template is required when not appending");
       if (!appendToExisting && useAiTitle && !titleTemplate.includes("{{ai_generated_title}}")) {
