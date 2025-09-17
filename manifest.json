@@ -3,7 +3,7 @@
   "name": "Flow State",
   "version": "0.1.0",
   "minAppVersion": "1.2.0",
-  "description": "Sync Flow State into your Obsidian vault.",
+  "description": "Transform handwritten notes and voice memos into Obsidian files",
   "author": "Flow State",
   "authorUrl": "https://findflow.ai",
   "isDesktopOnly": false,

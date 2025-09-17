@@ -5,7 +5,7 @@
 This plugin connects your Flow State account to Obsidian so you can seamlessly transcribe and save handwritten notes and audio files into your Obsidian vault. 
 
 ## Features
-- **AI instructions:** Give custom instructions to our AI for how you want your notes transcribed. For example, you can tell it translate your notes into another language, or explain things that are you didn't understand.
+- **Custom instructions:** Give custom instructions to FlowState for how you want your notes transcribed. For example, you can tell it to translate your notes into another language, or explain things that you didn't understand.
 - **Custom destination:** Choose the exact location in your vault where you want your notes to be saved. You can even choose different destinations for different projects.
 - **Filename template:** Create a template for how you want your files to be titled
 - **Append option:** Choose whether you want to create new files for each note or append to an existing file.
@@ -35,8 +35,8 @@ For manual installtion:
 Projects control where and how notes are saved. You can create multiple projects to handle different types of notes differently (separate transcription instructions, separate location to save them in, etc.)
 - Destination: choose a vault folder or an existing file to append to.
 - Title Template: use variables like `{{ai_generated_title}}`, `{{date_iso}}`, `{{time_iso}}`, and `{{original_filename}}`.
-- AI Title Suggestion: optionally add an AI-generated title into your template.
-- Instructions: tell the AI how to format or transform your notes.
+- Title Suggestion: optionally add an auto-generated title into your template.
+- Instructions: tell FlowState how to format or transform your notes.
 
 ### Share a note
 There are many ways to send your notes to Flow State:

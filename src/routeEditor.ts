@@ -281,8 +281,8 @@ export function renderRouteEditor(
     .addToggle((tg) => tg.setValue(includeOriginalFile).onChange((v) => includeOriginalFile = v));
 
     const useAiTitleSetting = new Setting(titleFold.body)
-    .setName("AI Title Suggestion")
-    .setDesc("Let AI suggest a title based on the transcription. Use this as part of the template below.\nMax 80 chars.")
+    .setName("Title Suggestion")
+    .setDesc("Automatically suggest a title based on the transcription. Use this as part of the template below.\nMax 80 chars.")
     .addToggle((tg) => tg.setValue(useAiTitle).onChange((v) => {
       useAiTitle = v;
       if (useAiTitle && !titleTemplate.includes("{{ai_generated_title}}")) {
@@ -381,7 +381,7 @@ export function renderRouteEditor(
   const aiFold = addFoldableSection(containerEl, "Transcription Options");
   const routeInstrSetting = new Setting(aiFold.body)
     .setName("Instructions")
-    .setDesc("Optional. Tell the AI how to transcribe your files.")
+    .setDesc("Optional. Tell FlowState how to transcribe your files.")
     .addTextArea((ta) => {
       ta.setValue(customInstructions).onChange((v) => customInstructions = v);
       ta.inputEl.rows = 4;
@@ -393,8 +393,8 @@ export function renderRouteEditor(
   let aiTitleInstrSettingRow: HTMLDivElement | null = null;
   {
     const row = new Setting(titleFold.body)
-      .setName("AI Title Instructions")
-      .setDesc("Optional. Used to instruct the AI when generating titles.")
+      .setName("Title Instructions")
+      .setDesc("Optional. Customize how titles are generated.")
       .addTextArea((ta) => {
         ta.setValue(aiTitleInstructions).onChange((v) => aiTitleInstructions = v);
         ta.inputEl.rows = 3;
