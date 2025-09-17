@@ -10,6 +10,8 @@ This plugin connects your Flow State account to Obsidian so you can seamlessly t
 - **Filename template:** Create a template for how you want your files to be titled
 - **Append option:** Choose whether you want to create new files for each note or append to an existing file.
 - **Original file:** Optionally save the original file (e.g., image/audio) to your vault’s attachments.
+- **Multiple Projects**: Create separate flows for different kinds of notes, with individual instructions and save locations 
+- **Email Upload**: Get a unique email address for each project where you can send handwritten notes and voice memos to be transcribed and stored 
 
 ## Installtion & Setup
 
@@ -38,7 +40,7 @@ Projects control where and how notes are saved. You can create multiple projects
 
 ### Share a note
 There are many ways to send your notes to Flow State:
-- Upload them through the [Flow State app](https://app.findflow.ai)
+- Upload them through the [Flow State app](https://app.findflow.ai) (beta)
 - Send an email to an address unique to your project.
 
 ### Sync your files 
