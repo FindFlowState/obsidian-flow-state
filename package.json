@@ -6,7 +6,8 @@
   "type": "module",
   "scripts": {
     "build-local": "node scripts/build.mjs --mode=local",
-    "build": "node scripts/build.mjs --mode=prod",
+    "build-prod": "node scripts/build.mjs --mode=prod",
+    "build": "node scripts/build.mjs --mode=local && node scripts/build.mjs --mode=prod",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
     "test:watch": "vitest"
