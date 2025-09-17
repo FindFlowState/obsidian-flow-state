@@ -2,7 +2,7 @@ import { App, PluginSettingTab, Setting, Notice, ButtonComponent } from "obsidia
 import type FlowStatePlugin from "./main";
 import type { Route } from "@flowstate/supabase-types";
 import { DEFAULT_SUPABASE_URL, DEFAULT_SUPABASE_ANON_KEY } from "./config";
-import { getSupabase, getCurrentSession, signOut as supaSignOut, sendMagicLink, listObsidianRoutes, deleteRoute } from "./supabase";
+import { getSupabase, getCurrentSession, signOut as supaSignOut, sendMagicLink, listObsidianRoutes, deleteRoute, fetchRouteById } from "./supabase";
 import { renderRouteEditor } from "./routeEditor";
 
 export type PluginSettings = {
@@ -190,8 +190,21 @@ export class FlowStateSettingTab extends PluginSettingTab {
             if ((ui as any).nameEl) (ui as any).nameEl.style.fontSize = "1.0em";
             if ((ui as any).descEl) (ui as any).descEl.style.color = "var(--text-muted)";
             ui.addButton((b) =>
-              b.setButtonText("Edit").onClick(() => {
-                this.editingRoute = r;
+              b.setButtonText("Edit").onClick(async () => {
+                try {
+                  const supa = getSupabase(this.settings);
+                  const fresh = await fetchRouteById(supa, r.id);
+                  this.editingRoute = fresh ?? r;
+                  // update cache with fresh row if available
+                  if (fresh) {
+                    this.settings.routes = this.settings.routes || {};
+                    this.settings.routes[r.id] = fresh;
+                    await this.plugin.saveData(this.settings);
+                  }
+                } catch (e) {
+                  // fallback to existing row if fetch fails
+                  this.editingRoute = r;
+                }
                 this.display();
               })
             );

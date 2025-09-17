@@ -568,7 +568,7 @@ export function renderRouteEditor(
       } else {
         const row = await createProject(supabase, app, {
           name,
-          slug,
+          // Do not pass slug on create; backend will generate
           destination_location: destinationFolder,
           append_to_existing: appendToExisting,
           include_original_file: includeOriginalFile,
