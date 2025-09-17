@@ -191,21 +191,12 @@ export async function createProject(
   if (userErr) throw userErr;
   const uid = userData.user?.id;
   if (!uid) throw new Error("Not signed in");
-  const slugify = (s: string) =>
-    s
-      .toLowerCase()
-      .trim()
-      .replace(/[^a-z0-9\s-]/g, "")
-      .replace(/\s+/g, "-")
-      .replace(/-+/g, "-");
-  const slug = params.slug && params.slug.trim() ? params.slug.trim() : slugify(params.name);
-  if (!slug) throw new Error("Slug could not be derived from name");
+  // Do not set slug on create; let the backend generate a unique slug automatically
   const connection_id = await ensureObsidianConnection(supabase, app);
   // Build insert payload without introducing nulls for NOT NULL columns.
   const insertPayload: RouteInsert = {
     user_id: uid,
     name: params.name,
-    slug,
     // Optional columns: omit when not provided to let DB defaults apply
     destination_location: params.destination_location ?? undefined,
     destination_config: params.destination_config ?? undefined,
@@ -239,7 +230,17 @@ export async function updateRoute(
     .eq("id", routeId)
     .select()
     .single();
-  if (error) throw error;
+  if (error) {
+    const msg = String(error.message || error).toLowerCase();
+    if (
+      msg.includes("duplicate key value") ||
+      msg.includes("unique constraint") ||
+      msg.includes("routes_user_id_slug_key")
+    ) {
+      throw new Error("That email slug is already in use for your account. Please choose a different slug.");
+    }
+    throw error;
+  }
   return data as unknown as Route;
 }
 
