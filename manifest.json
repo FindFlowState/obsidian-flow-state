@@ -1,7 +1,7 @@
 {
   "id": "flow-state",
   "name": "Flow State",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "minAppVersion": "1.2.0",
   "description": "Transform handwritten notes and voice memos into Obsidian files",
   "author": "Flow State",
