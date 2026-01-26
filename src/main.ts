@@ -13,7 +13,7 @@ export default class FlowStatePlugin extends Plugin {
   pollIntervalId: number | null = null;
   settingsTab?: FlowStateSettingTab;
   // Internal poll intervals (seconds)
-  private static readonly DESKTOP_POLL_SEC = 60;
+  private static readonly DESKTOP_POLL_SEC = 120;
   private static readonly MOBILE_POLL_SEC = 300;
 
   async onload() {
