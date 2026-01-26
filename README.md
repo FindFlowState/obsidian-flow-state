@@ -1,6 +1,6 @@
-# Flow State (Obsidian Plugin)
+# FlowState (Obsidian Plugin)
 
-[Flow State](https://findflow.ai) is the missing bridge between your offline notes and your digital brain. The app transcribes handwritten notes and voice memos using AI, and automatically stores the files exactly where you want in your Obsidian vault and other apps.
+[FlowState](https://findflow.ai) is the missing bridge between your offline notes and your digital brain. The app transcribes handwritten notes and voice memos using AI, and automatically stores the files exactly where you want in your Obsidian vault and other apps.
 
 ## Features
 
@@ -16,11 +16,11 @@
 
 ### Requirements
 - Obsidian v1.2.0 or newer
-- A Flow State account (free to create)
+- A FlowState account (free to create)
 
 ### Install from Community Plugins
 1. Open Obsidian Settings → Community plugins
-2. Search for "Flow State"
+2. Search for "FlowState"
 3. Click Install, then Enable
 
 ### Manual Installation
@@ -29,11 +29,11 @@
 3. In Obsidian, enable the plugin (Settings → Community plugins)
 
 ### Connect Your Account
-1. Open Settings → Community plugins → Flow State
+1. Open Settings → Community plugins → FlowState
 2. Enter your email and press **Connect** to receive a Magic Link
 3. Check your email and click the link to sign in (check spam if needed)
 
-If you don't have a Flow State account, one will automatically be created for you.
+If you don't have a FlowState account, one will automatically be created for you.
 
 ## Using the Plugin
 
@@ -50,24 +50,24 @@ Projects control where and how notes are saved. You can create multiple projects
 - **File Name / Note Heading Instructions:** Customize how AI generates titles (e.g., "Keep it short", "Include the date")
 
 **Enrichment Options:**
-- **Instructions:** Tell Flow State's AI how to process your notes beyond basic transcription. Examples: "Translate to Spanish", "Add context and book suggestions", "Turn circled words into hashtags"
+- **Instructions:** Tell FlowState's AI how to process your notes beyond basic transcription. Examples: "Translate to Spanish", "Add context and book suggestions", "Turn circled words into hashtags"
 
 **Email Options** (after creating a project):
 - **Project Tag:** A unique identifier used in your project's email address
 - **Project Email:** Send files to this address to auto-transcribe and save to this project
 
 ### Send a Note
-There are several ways to send notes to Flow State:
+There are several ways to send notes to FlowState:
 - **Email:** Send to your project's unique email address (supports 1 PDF, 1 audio file, or multiple PNG/JPG images)
-- **Mobile app:** Upload through the [Flow State mobile app](https://findflow.ai)
+- **Mobile app:** Upload through the [FlowState mobile app](https://findflow.ai)
 
 ### Sync Your Files
-After you send a note, Flow State transcribes it using your project's settings. The plugin automatically syncs completed transcriptions into your vault. You can also manually sync by clicking the **Sync** button in settings.
+After you send a note, FlowState transcribes it using your project's settings. The plugin automatically syncs completed transcriptions into your vault. You can also manually sync by clicking the **Sync** button in settings.
 
 ## Privacy
 - No analytics or tracking are included in this plugin
-- Only your Flow State outputs (and optionally original files) are written to your vault
-- Flow State does not view or store any other files from your vault
+- Only your FlowState outputs (and optionally original files) are written to your vault
+- FlowState does not view or store any other files from your vault
 
 ## Troubleshooting
 - **Email address not showing:** Email options appear only after a project is created and saved
