@@ -1,4 +1,4 @@
-import { App, ButtonComponent, Notice, Setting, AbstractInputSuggest, TFolder, TFile } from "obsidian";
+import { App, ButtonComponent, Notice, Setting, AbstractInputSuggest, TFolder, TFile, normalizePath } from "obsidian";
 import type FlowStatePlugin from "./main";
 import type { Route } from "@flowstate/supabase-types";
 import { getSupabase, createProject, updateRoute, deleteRoute } from "./supabase";
@@ -395,8 +395,8 @@ export function renderRouteEditor(
     try {
       if (!name) throw new Error("Name is required");
       if (!destinationFolder) throw new Error("Destination is required");
-      // Normalize append target to a file with .md when appending
-      let normalizedDest = destinationFolder.trim();
+      // Normalize path for cross-platform safety, then handle append target
+      let normalizedDest = normalizePath(destinationFolder.trim());
       if (appendToExisting) {
         if (normalizedDest.endsWith("/")) {
           // If user provided a folder-like path, create a default file inside it

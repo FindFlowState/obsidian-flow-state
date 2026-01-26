@@ -1,4 +1,4 @@
-import { Notice, Platform, Plugin } from "obsidian";
+import { Notice, Platform, Plugin, normalizePath } from "obsidian";
 import type { Job, Route } from "@flowstate/supabase-types";
 import { FlowStateSettingTab, PluginSettings, DEFAULT_SETTINGS } from "./settings";
 import { getSupabase, exchangeFromObsidianParams, fetchRouteById, ensureObsidianConnection } from "./supabase";
@@ -207,7 +207,7 @@ export default class FlowStatePlugin extends Plugin {
     } else {
       log(`writeJobToVault: using cached route ${routeId}`);
     }
-    const destinationLocation = route!.destination_location!.trim();
+    const destinationLocation = normalizePath(route!.destination_location!.trim());
     const appendMode = !!(route as any).append_to_existing;
     const includeOriginal = (route as any).include_original_file as boolean | null | undefined;
     log(`writeJobToVault: route fields dest="${destinationLocation}" appendMode=${appendMode} includeOriginal=${includeOriginal}`);

@@ -1,8 +1,8 @@
-import { TFile, type App } from "obsidian";
+import { TFile, type App, normalizePath } from "obsidian";
 import sanitize from "sanitize-filename";
 
 export async function ensureFolder(app: App, folderPath: string) {
-  const parts = folderPath.split("/").filter(Boolean);
+  const parts = normalizePath(folderPath).split("/").filter(Boolean);
   let current = "";
   for (const p of parts) {
     current = current ? `${current}/${p}` : p;
@@ -13,6 +13,7 @@ export async function ensureFolder(app: App, folderPath: string) {
 }
 
 export async function atomicWrite(app: App, path: string, content: string) {
+  path = normalizePath(path);
   const exists = await app.vault.adapter.exists(path);
   if (exists) {
     const f = app.vault.getAbstractFileByPath(path);
@@ -63,11 +64,12 @@ export async function writeBinaryToAttachments(
     folder = `${base}/${sub}`;
   }
 
+  folder = normalizePath(folder);
   await ensureFolder(app, folder);
 
   // Compute a non-colliding path if needed
   const adapter = app.vault.adapter;
-  const makePath = (name: string) => `${folder}/${name}`;
+  const makePath = (name: string) => normalizePath(`${folder}/${name}`);
 
   let targetName = filename;
   let targetPath = makePath(targetName);
