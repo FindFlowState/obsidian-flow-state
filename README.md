@@ -1,69 +1,96 @@
 # Flow State (Obsidian Plugin)
 
-[Flow State](https://findflow.ai) is the missing bridge between your analog notes and your digital brain. The app transcribes handwritten notes and voice memos, and automatically stores the files exactly where you want in your cloud platforms and note-taking apps.
-
-This plugin connects your Flow State account to Obsidian so you can seamlessly transcribe and save handwritten notes and audio files into your Obsidian vault. 
+[Flow State](https://findflow.ai) is the missing bridge between your offline notes and your digital brain. The app transcribes handwritten notes and voice memos using AI, and automatically stores the files exactly where you want in your Obsidian vault and other apps.
 
 ## Features
-- **Custom instructions:** Give custom instructions to FlowState for how you want your notes transcribed. For example, you can tell it to translate your notes into another language, or explain things that you didn't understand.
-- **Custom destination:** Choose the exact location in your vault where you want your notes to be saved. You can even choose different destinations for different projects.
-- **Filename template:** Create a template for how you want your files to be titled
-- **Append option:** Choose whether you want to create new files for each note or append to an existing file.
-- **Original file:** Optionally save the original file (e.g., image/audio) to your vault’s attachments.
-- **Multiple Projects**: Create separate flows for different kinds of notes, with individual instructions and save locations 
-- **Email Upload**: Get a unique email address for each project where you can send handwritten notes and voice memos to be transcribed and stored 
 
-## Installtion & Setup
+- **AI-powered transcription:** Handwritten notes and audio recordings are transcribed using advanced AI, with automatic file naming based on content.
+- **Enrichment options:** Go beyond transcription—translate, summarize, add context, extract action items, turn circled words into hashtags, and more.
+- **Custom destinations:** Choose the exact location in your vault where you want your notes saved. Create different destinations for different projects.
+- **Append mode:** Create new files for each note, or append to an existing file with auto-generated headings.
+- **Download originals:** Optionally save the original handwriting images or audio files to your vault.
+- **Multiple projects:** Create separate projects for different kinds of notes, each with its own instructions and save location.
+- **Email upload:** Get a unique email address for each project to send handwritten notes and voice memos for transcription.
+
+## Installation & Setup
 
 ### Requirements
-- Obsidian v1.2.0 or newer.
+- Obsidian v1.2.0 or newer
+- A Flow State account (free to create)
 
-### Install
-You can install this plugin from from Obsidian Community Plugins. 
+### Install from Community Plugins
+1. Open Obsidian Settings → Community plugins
+2. Search for "Flow State"
+3. Click Install, then Enable
 
-For manual installtion:
-1. Download the latest release assets: `manifest.json`, `main.js` (and `styles.css` if present).
-2. Place them in your vault at `.obsidian/plugins/flow-state-obsidian/`.
-3. In Obsidian, enable the plugin (Settings → Community plugins).
+### Manual Installation
+1. Download the latest release assets: `manifest.json`, `main.js` (and `styles.css` if present)
+2. Place them in your vault at `.obsidian/plugins/flow-state/`
+3. In Obsidian, enable the plugin (Settings → Community plugins)
 
-### Connect your account
-1. Open Settings → Community plugins → Flow State.
-2. Enter your email and press Connect to receive a Magic Link. If you do not have a Flow State account, one will automatically be created for you.
-3. Check your email and click the link to sign in (check your spam folder if you don't see it). 
+### Connect Your Account
+1. Open Settings → Community plugins → Flow State
+2. Enter your email and press **Connect** to receive a Magic Link
+3. Check your email and click the link to sign in (check spam if needed)
 
-### Create a project
-Projects control where and how notes are saved. You can create multiple projects to handle different types of notes differently (separate transcription instructions, separate location to save them in, etc.)
-- Destination: choose a vault folder or an existing file to append to.
-- Title Template: use variables like `{{ai_generated_title}}`, `{{date_iso}}`, `{{time_iso}}`, and `{{original_filename}}`.
-- Title Suggestion: optionally add an auto-generated title into your template.
-- Instructions: tell FlowState how to format or transform your notes.
+If you don't have a Flow State account, one will automatically be created for you.
 
-### Share a note
-There are many ways to send your notes to Flow State:
-- Upload them through the [Flow State app](https://app.findflow.ai) (beta)
-- Send an email to an address unique to your project.
+## Using the Plugin
 
-### Sync your files 
-After you send your note, Flow State will transcribe it using the guidelines and instructions you set. When the files are ready, this plugin will then automatically sync them into your vault.
+### Create a Project
+Projects control where and how notes are saved. You can create multiple projects to handle different types of notes differently.
 
+**Settings:**
+- **Name:** A descriptive name for your project
+- **Append to existing:** Toggle on to append all notes to a single file (with AI-generated headings), or off to create new files
+- **Destination:** Choose a vault folder (for new files) or an existing file (for append mode)
+
+**Save Options:**
+- **Download Original:** Save the original handwriting image or audio file to your vault
+- **File Name / Note Heading Instructions:** Customize how AI generates titles (e.g., "Keep it short", "Include the date")
+
+**Enrichment Options:**
+- **Instructions:** Tell Flow State's AI how to process your notes beyond basic transcription. Examples: "Translate to Spanish", "Add context and book suggestions", "Turn circled words into hashtags"
+
+**Email Options** (after creating a project):
+- **Project Tag:** A unique identifier used in your project's email address
+- **Project Email:** Send files to this address to auto-transcribe and save to this project
+
+### Send a Note
+There are several ways to send notes to Flow State:
+- **Email:** Send to your project's unique email address (supports 1 PDF, 1 audio file, or multiple PNG/JPG images)
+- **Mobile app:** Upload through the [Flow State mobile app](https://findflow.ai)
+
+### Sync Your Files
+After you send a note, Flow State transcribes it using your project's settings. The plugin automatically syncs completed transcriptions into your vault. You can also manually sync by clicking the **Sync** button in settings.
 
 ## Privacy
-- No analytics or tracking are included in this plugin.
-- Only your Flow State outputs (and optionally original files) are written to your vault.
-- Flow State does not view or store any other files from your vault.
+- No analytics or tracking are included in this plugin
+- Only your Flow State outputs (and optionally original files) are written to your vault
+- Flow State does not view or store any other files from your vault
 
 ## Troubleshooting
-- Email address for uploads: shown only after a project is created.
-- If you see auth errors, try signing out and connecting again.
+- **Email address not showing:** Email options appear only after a project is created and saved
+- **Auth errors:** Try signing out and connecting again
+- **Notes not syncing:** Click the Sync button manually, or check that Obsidian is running
+
+## Support
+- Website: [findflow.ai](https://findflow.ai)
+- Issues: [GitHub Issues](https://github.com/FindFlowState/obsidian-flow-state/issues)
 
 ## Development
+
 Build requirements: Node 20+
 
-Commands:
 ```sh
 npm install
-# Production bundle (outputs main.js next to manifest.json)
-npm run build
-# Local/dev bundle (outputs to dist/local with a dev manifest)
+
+# Production build
+npm run build-prod
+
+# Local development build
 npm run build-local
+
+# Run tests
+npm test
 ```
