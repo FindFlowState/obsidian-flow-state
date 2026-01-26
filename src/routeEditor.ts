@@ -3,7 +3,7 @@ import type FlowStatePlugin from "./main";
 import type { Route } from "@flowstate/supabase-types";
 import { getSupabase, createProject, updateRoute, deleteRoute } from "./supabase";
 import { DEFAULT_INGEST_EMAIL_DOMAIN } from "./config";
-import { ensureFolder, atomicWrite, buildSafeNoteFilename } from "./fs";
+import { ensureFolder, atomicWrite } from "./fs";
 
 // Inline folder typeahead using Obsidian's AbstractInputSuggest
 class FolderInputSuggest extends AbstractInputSuggest<TFolder> {
@@ -89,18 +89,6 @@ class FileInputSuggest extends AbstractInputSuggest<TFile> {
   }
 }
 
-function insertTokenBeforeExtension(template: string, token: string): string {
-  if (!template) return token;
-  if (template.includes(token)) return template;
-  const dot = template.lastIndexOf(".");
-  if (dot > 0 && dot < template.length - 1) {
-    const base = template.slice(0, dot).trimEnd();
-    const ext = template.slice(dot);
-    return `${base} ${token}${ext}`;
-  }
-  return `${template.trimEnd()} ${token}`;
-}
-
 export function renderRouteEditor(
   containerEl: HTMLElement,
   app: App,
@@ -117,25 +105,12 @@ export function renderRouteEditor(
     (s.controlEl as HTMLElement).style.maxWidth = "100%";
   };
 
-  // Helper to remove the AI title token from a template and tidy spacing
-  const removeAiTitleToken = (tpl: string) => {
-    const token = "{{ai_generated_title}}";
-    if (!tpl.includes(token)) return tpl;
-    // Remove token with surrounding spaces/underscores/dashes commonly used as separators
-    let out = tpl
-      .replace(new RegExp(`\\s*${token}\\s*`, "g"), " ")
-      .replace(/\s{2,}/g, " ")
-      .replace(/\s+\./g, "."); // clean space before dot if any
-    return out.trim();
-  };
   // Local state
   let name = existing?.name ?? "";
   let destinationFolder = existing?.destination_location ?? "";
   let includeOriginalFile = existing?.include_original_file ?? true;
   let appendToExisting = existing?.append_to_existing ?? false;
   let customInstructions = existing?.custom_instructions ?? "";
-  let useAiTitle = existing?.use_ai_title ?? true;
-  let titleTemplate = existing?.title_template ?? "{{date_iso}} – {{ai_generated_title}}";
   let aiTitleInstructions = existing?.ai_title_instructions ?? "";
   let slug = (existing as any)?.slug ?? "";
   let userHandle = "";
@@ -186,10 +161,9 @@ export function renderRouteEditor(
   let destinationSetting: Setting;
   new Setting(containerEl)
     .setName("Append to existing")
-    .setDesc("If on, destination should be a file. A heading will be added for each upload using the Title Template below..")
+    .setDesc("If on, destination should be a file. A heading will be added for each upload.")
     .addToggle((tg) => tg.setValue(appendToExisting).onChange((v) => {
       appendToExisting = v;
-      updateTitleSectionVisibility();
       if (destinationSetting) destinationSetting.setName(appendToExisting ? "Destination File" : "Destination Folder");
       // Restore the last selection for that mode (or clear if none)
       destinationFolder = appendToExisting
@@ -272,112 +246,36 @@ export function renderRouteEditor(
     return { section, header, body, setOpen: (v: boolean) => { open = v; update(); } };
   };
 
-  // File Saving Options (foldable, only visible when not appending)
-  const titleFold = addFoldableSection(containerEl, "Save Options");
+  // Save Options (foldable)
+  const saveOptsFold = addFoldableSection(containerEl, "Save Options");
 
-  new Setting(titleFold.body)
+  new Setting(saveOptsFold.body)
     .setName("Include Original")
     .setDesc("Embed the original handwriting or audio in the file")
     .addToggle((tg) => tg.setValue(includeOriginalFile).onChange((v) => includeOriginalFile = v));
 
-    const useAiTitleSetting = new Setting(titleFold.body)
-    .setName("Title Suggestion")
-    .setDesc("Automatically suggest a title based on the transcription. Use this as part of the template below.\nMax 80 chars.")
-    .addToggle((tg) => tg.setValue(useAiTitle).onChange((v) => {
-      useAiTitle = v;
-      if (useAiTitle && !titleTemplate.includes("{{ai_generated_title}}")) {
-        titleTemplate = insertTokenBeforeExtension(titleTemplate, "{{ai_generated_title}}");
-        const input = titleSetting.controlEl.querySelector("input") as HTMLInputElement | null;
-        if (input) input.value = titleTemplate;
-      } else if (!useAiTitle && titleTemplate.includes("{{ai_generated_title}}")) {
-        titleTemplate = removeAiTitleToken(titleTemplate);
-        const input = titleSetting.controlEl.querySelector("input") as HTMLInputElement | null;
-        if (input) input.value = titleTemplate;
-      }
-      // toggle AI Title Instructions visibility (only when ON)
-      if (aiTitleInstrSettingRow) aiTitleInstrSettingRow.style.display = useAiTitle ? "" : "none";
-      // Update preview when toggled
-      if (typeof updateTitlePreview === 'function') updateTitlePreview();
-    }));
+  // AI-generated titling info
+  const titleInfoEl = saveOptsFold.body.createDiv();
+  titleInfoEl.style.fontSize = "0.9em";
+  titleInfoEl.style.color = "var(--text-muted)";
+  titleInfoEl.style.marginBottom = "12px";
+  titleInfoEl.style.marginTop = "8px";
+  titleInfoEl.appendText("File names and headings are automatically generated by AI based on your content.");
 
-  // Title template + preview (variables in description, preview below input)
-  let previewTextEl: HTMLSpanElement | null = null;
-  const titleSetting = new Setting(titleFold.body)
-    .setName("Title Template")
-    .setDesc(createFragment((f) => {
-      const vars = f.createEl("div");
-      vars.appendText("Available variables: ");
-      const list = ["{{ai_generated_title}}", "{{date_iso}}", "{{time_iso}}", "{{original_filename}}"];
-      list.forEach((v, i) => {
-        const code = f.createEl("code", { text: v });
-        if (i < list.length - 1) f.appendText("  ");
-      });
-    }))
-    .addText((t) => {
-      t.setValue(titleTemplate)
-       .onChange((v) => {
-         // Disallow characters that cannot be used in filenames
-         const sanitized = v.replace(/[\\/:*?"<>|]/g, "");
-         if (sanitized !== v) {
-           t.setValue(sanitized);
-         }
-         titleTemplate = sanitized;
-         if (typeof updateTitlePreview === 'function') updateTitlePreview();
-       });
-      t.inputEl.style.width = "100%";
+  // Title Instructions (always visible)
+  const titleInstrSetting = new Setting(saveOptsFold.body)
+    .setName("Title Instructions")
+    .setDesc("Optional. Customize how titles are generated (e.g., 'Keep it short', 'Include the date').")
+    .addTextArea((ta) => {
+      ta.setValue(aiTitleInstructions).onChange((v) => aiTitleInstructions = v);
+      ta.inputEl.rows = 2;
+      ta.inputEl.style.width = "100%";
+      ta.inputEl.maxLength = 100;
+      ta.setPlaceholder("e.g., Keep it short and descriptive");
     });
-  // Ensure the control area stacks elements vertically so the preview appears below the input
-  (titleSetting.controlEl as HTMLElement).style.display = "flex";
-  (titleSetting.controlEl as HTMLElement).style.flexDirection = "column";
-  (titleSetting.controlEl as HTMLElement).style.alignItems = "stretch";
-  // Add preview under the text field (same Setting), styled like description
-  {
-    const prev = titleSetting.controlEl.createDiv();
-    // Make the preview take the full row below the input within the flex container
-    prev.style.flexBasis = "100%";
-    prev.style.width = "100%";
-    prev.style.display = "block";
-    prev.style.order = "2";
-    prev.style.alignSelf = "stretch";
-    prev.style.marginTop = "6px";
-    prev.style.fontSize = "var(--font-ui-smaller)";
-    prev.style.color = "var(--text-muted)";
-    prev.appendText("Preview: ");
-    previewTextEl = prev.createEl("span", { text: "" });
-  }
-  applyWideControl(titleSetting);
+  applyWideControl(titleInstrSetting);
 
-  // Simple template renderer matching common variables used in web app
-  function updateTitlePreview() {
-    const now = new Date();
-    const pad = (n: number) => String(n).padStart(2, "0");
-    const dateIso = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
-    const timeIso = `${pad(now.getHours())}:${pad(now.getMinutes())}`;
-    const ctx = {
-      ai_generated_title: "Lecture Notes",
-      date_iso: dateIso,
-      time_iso: timeIso,
-      original_filename: "IMG_1234",
-    } as const;
-    let rendered = titleTemplate || "";
-    rendered = rendered
-      .replace(/\{\{\s*ai_generated_title\s*\}\}/g, ctx.ai_generated_title)
-      .replace(/\{\{\s*date_iso\s*\}\}/g, ctx.date_iso)
-      .replace(/\{\{\s*time_iso\s*\}\}/g, ctx.time_iso)
-      .replace(/\{\{\s*original_filename\s*\}\}/g, ctx.original_filename)
-      .trim();
-    const safe = buildSafeNoteFilename(rendered, 120);
-    if (previewTextEl) previewTextEl.textContent = `${safe}`;
-  }
-  updateTitlePreview();
-
-  const updateTitleSectionVisibility = () => {
-    // Always show File Saving section, even when appending
-    (titleFold.section as HTMLDivElement).style.display = "";
-  };
-  updateTitleSectionVisibility();
-
-  // AI & Instructions (foldable)
+  // Transcription Options (foldable)
   const aiFold = addFoldableSection(containerEl, "Transcription Options");
   const routeInstrSetting = new Setting(aiFold.body)
     .setName("Instructions")
@@ -388,22 +286,6 @@ export function renderRouteEditor(
       ta.inputEl.style.width = "100%";
     });
   applyWideControl(routeInstrSetting);
-
-  // AI Title Instructions now lives in File Saving Options and only shows when Use AI Title is ON
-  let aiTitleInstrSettingRow: HTMLDivElement | null = null;
-  {
-    const row = new Setting(titleFold.body)
-      .setName("Title Instructions")
-      .setDesc("Optional. Customize how titles are generated.")
-      .addTextArea((ta) => {
-        ta.setValue(aiTitleInstructions).onChange((v) => aiTitleInstructions = v);
-        ta.inputEl.rows = 3;
-        ta.inputEl.style.width = "100%";
-      });
-    applyWideControl(row);
-    aiTitleInstrSettingRow = row.settingEl as HTMLDivElement;
-    aiTitleInstrSettingRow.style.display = useAiTitle ? "" : "none";
-  }
 
   // Email (foldable) — only shown when editing an existing Project
   if (existing) {
@@ -547,10 +429,6 @@ export function renderRouteEditor(
         }
         if (!(dest instanceof TFolder)) throw new Error("Destination must be a folder path");
       }
-      if (!appendToExisting && !titleTemplate) throw new Error("Title template is required when not appending");
-      if (!appendToExisting && useAiTitle && !titleTemplate.includes("{{ai_generated_title}}")) {
-        titleTemplate = insertTokenBeforeExtension(titleTemplate, "{{ai_generated_title}}");
-      }
       const supabase = getSupabase(plugin.settings);
       if (existing) {
         const row = await updateRoute(supabase, existing.id, {
@@ -559,9 +437,8 @@ export function renderRouteEditor(
           destination_location: destinationFolder,
           append_to_existing: appendToExisting,
           include_original_file: includeOriginalFile,
-          title_template: titleTemplate,
           custom_instructions: customInstructions || null,
-          use_ai_title: useAiTitle,
+          use_ai_title: true, // Always use AI-generated titles
           ai_title_instructions: aiTitleInstructions || null,
         });
         await onSaved(row);
@@ -572,9 +449,8 @@ export function renderRouteEditor(
           destination_location: destinationFolder,
           append_to_existing: appendToExisting,
           include_original_file: includeOriginalFile,
-          title_template: titleTemplate,
           custom_instructions: customInstructions || null,
-          use_ai_title: useAiTitle,
+          use_ai_title: true, // Always use AI-generated titles
           ai_title_instructions: aiTitleInstructions || null,
         });
         await onSaved(row);

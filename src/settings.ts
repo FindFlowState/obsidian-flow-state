@@ -209,20 +209,20 @@ export class FlowStateSettingTab extends PluginSettingTab {
               })
             );
             ui.addButton((b) => {
-              b.setButtonText("Delete");
+              b.setButtonText("Archive");
               const el = b.buttonEl;
               el.style.background = "transparent";
-              el.style.border = "1px solid var(--color-red)";
+              el.style.border = "1px solid var(--text-muted)";
               el.style.color = "var(--text-normal)";
               b.onClick(async () => {
-                const ok = window.confirm(`Delete project "${r.name}"? This cannot be undone.`);
+                const ok = window.confirm(`Archive project "${r.name}"? It will no longer appear in your projects list.`);
                 if (!ok) return;
                 try {
                   const supa = getSupabase(this.settings);
                   await deleteRoute(supa, r.id);
                   if (this.settings.routes) delete this.settings.routes[r.id];
                   await this.plugin.saveData(this.settings);
-                  new Notice("Project deleted");
+                  new Notice("Project archived");
                   this.display();
                 } catch (e: any) {
                   console.error(e);

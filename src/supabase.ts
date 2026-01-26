@@ -145,6 +145,7 @@ export async function listObsidianRoutes(
     .from("routes")
     .select(`*, connections!inner(service_type)`)
     .eq("user_id", uid)
+    .eq("is_active", true)
     .eq("connections.service_type", "obsidian")
     .order("id", { ascending: true });
   if (error) throw error;
@@ -179,7 +180,6 @@ export async function createProject(
     destination_location?: string | null;
     destination_config?: any;
     include_original_file?: boolean;
-    title_template?: string | null;
     append_to_existing?: boolean | null;
     custom_instructions?: string | null;
     use_ai_title?: boolean | null;
@@ -201,10 +201,9 @@ export async function createProject(
     destination_location: params.destination_location ?? undefined,
     destination_config: params.destination_config ?? undefined,
     include_original_file: params.include_original_file ?? undefined, // DB default true
-    title_template: params.title_template ?? undefined,
     append_to_existing: params.append_to_existing ?? undefined, // DB default false
     custom_instructions: params.custom_instructions ?? undefined,
-    use_ai_title: params.use_ai_title ?? undefined, // DB default true
+    use_ai_title: params.use_ai_title ?? true, // Always use AI-generated titles
     ai_title_instructions: params.ai_title_instructions ?? undefined,
     // Ensure active by default per schema NOT NULL DEFAULT true
     is_active: params.is_active ?? true,
@@ -248,9 +247,10 @@ export async function deleteRoute(
   supabase: SupabaseClient<Database>,
   routeId: string
 ): Promise<void> {
+  // Soft delete: set is_active to false instead of hard delete
   const { error } = await supabase
     .from("routes")
-    .delete()
+    .update({ is_active: false })
     .eq("id", routeId);
   if (error) throw error;
 }

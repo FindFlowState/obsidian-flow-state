@@ -143,11 +143,12 @@ export default class FlowStatePlugin extends Plugin {
   async syncOnce(): Promise<number> {
     const supabase = getSupabase(this.settings);
 
-    // Single-query join to filter Obsidian routes
+    // Single-query join to filter Obsidian routes (only active routes)
     const { data: items, error: jErr } = await supabase
       .from("jobs")
       .select(`*, routes!inner(*, connections!inner(service_type))`)
       .eq("status", "transcribed")
+      .eq("routes.is_active", true)
       .eq("routes.connections.service_type", "obsidian")
       .order("created_at", { ascending: true })
       .limit(10);
@@ -191,8 +192,6 @@ export default class FlowStatePlugin extends Plugin {
       if (!r) return true;
       if (!r.destination_location || !String(r.destination_location).trim()) return true;
       if ((r as any).include_original_file == null) return true;
-      const appendMode = !!(r as any).append_to_existing;
-      if (!appendMode && !(r as any).title_template) return true;
       return false;
     };
     const refresh = needsRefresh(route);
