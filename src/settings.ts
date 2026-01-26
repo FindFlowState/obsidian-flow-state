@@ -239,12 +239,14 @@ export class FlowStateSettingTab extends PluginSettingTab {
           syncBtn.addEventListener("click", () => this.plugin.syncNow());
         };
 
-        // Render from cache immediately (only projects belonging to the last known user)
+        // Render from cache immediately (only active projects belonging to the last known user)
         const uid = this.settings.lastUserId || null;
         const cachedAll = Object.values(this.settings.routes || {});
         const cachedForUser = uid
-          ? cachedAll.filter((r: any) => r.user_id === uid)
+          ? cachedAll.filter((r: any) => r.user_id === uid && r.is_active !== false)
           : [];
+        // Sort cached routes by id ascending to match the server query order
+        cachedForUser.sort((a: any, b: any) => (a.id > b.id ? 1 : a.id < b.id ? -1 : 0));
         if (cachedForUser.length > 0) {
           renderRows(cachedForUser as Route[]);
         } else {
@@ -255,15 +257,25 @@ export class FlowStateSettingTab extends PluginSettingTab {
         // Fetch fresh from Supabase, update cache, and re-render
         const rows: Route[] = await listObsidianRoutes(supabase);
         const valid: Route[] = [];
+        const freshIds = new Set<string>();
         for (const r of rows) {
           try {
             const folder = r.destination_location?.trim();
             if (!folder) throw new Error("Missing destination_location");
             valid.push(r);
+            freshIds.add(r.id);
             this.settings.routes = this.settings.routes || {};
             this.settings.routes[r.id] = r;
           } catch (e) {
             console.warn("Skipping project due to invalid destination:", r.id, e);
+          }
+        }
+        // Clean up stale cache entries (archived/deleted projects not in fresh list)
+        if (this.settings.routes) {
+          for (const cachedId of Object.keys(this.settings.routes)) {
+            if (!freshIds.has(cachedId)) {
+              delete this.settings.routes[cachedId];
+            }
           }
         }
         // After fresh fetch, store the definitive user id for future cache filtering
