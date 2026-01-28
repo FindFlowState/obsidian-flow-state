@@ -6,6 +6,7 @@ import { DEFAULT_SUPABASE_URL, DEFAULT_SUPABASE_ANON_KEY, BUILD_ENV } from "./co
 import { ensureFolder, atomicWrite, writeBinaryToAttachments, sanitizePath, buildSafeNoteFilename } from "./fs";
 import { downloadFromStorage } from "./storage";
 import { log, warn, error } from "./logger";
+import { initSentry, captureException } from "./sentry";
 
 export default class FlowStatePlugin extends Plugin {
   settings: PluginSettings = DEFAULT_SETTINGS;
@@ -17,6 +18,9 @@ export default class FlowStatePlugin extends Plugin {
   private static readonly MOBILE_POLL_SEC = 300;
 
   async onload() {
+    // Initialize Sentry error tracking (prod builds only)
+    initSentry();
+
     await this.loadSettings();
 
     // Settings tab
@@ -31,6 +35,7 @@ export default class FlowStatePlugin extends Plugin {
       name: "Sync Now",
       callback: () => this.syncNow(),
     });
+
 
     if (BUILD_ENV === "local") {
       this.addCommand({
@@ -130,11 +135,21 @@ export default class FlowStatePlugin extends Plugin {
         new Notice("Flow State: configure Supabase in settings");
         return;
       }
+
+      // Check if user is signed in
+      const supabase = getSupabase(this.settings);
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        new Notice("Flow State: No account signed in");
+        return;
+      }
+
       this.setStatus("Syncing...");
       const written = await this.syncOnce();
       this.setStatus(`delivered ${written} item${written === 1 ? "" : "s"}`);
     } catch (e: any) {
       error("Sync error", e);
+      captureException(e, { context: "syncNow" });
       this.setStatus("Error");
       new Notice(`Flow State sync error: ${e?.message ?? e}`);
     }

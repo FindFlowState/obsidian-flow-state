@@ -3,6 +3,7 @@ import { build } from 'esbuild';
 import { readFileSync, existsSync, mkdirSync, copyFileSync, writeFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, resolve, join } from 'path';
+import { execSync } from 'child_process';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -43,16 +44,29 @@ const SUPABASE_URL = env.SUPABASE_URL || '';
 const SUPABASE_ANON_KEY = env.SUPABASE_ANON_KEY || '';
 const INGEST_EMAIL_DOMAIN = env.INGEST_EMAIL_DOMAIN || '';
 const ENV = env.ENV || (mode === 'prod' ? 'prod' : 'local');
+const SENTRY_DSN = mode === 'prod' ? (env.SENTRY_DSN_OBSIDIAN || '') : '';
+const SENTRY_AUTH_TOKEN = env.SENTRY_AUTH_TOKEN || '';
+
+// Read version from manifest for Sentry release
+const manifestPath = resolve(projectRoot, 'manifest.json');
+const manifestData = existsSync(manifestPath) ? JSON.parse(readFileSync(manifestPath, 'utf8')) : {};
+const SENTRY_RELEASE = `flow-state-obsidian@${manifestData.version || '0.0.0'}`;
 
 if (!SUPABASE_URL || !SUPABASE_ANON_KEY || !INGEST_EMAIL_DOMAIN) {
   console.warn(`[build] Warning: SUPABASE_URL or SUPABASE_ANON_KEY or INGEST_EMAIL_DOMAIN missing in ${envPath}. Settings fallback may be required.`);
+}
+
+if (mode === 'prod' && !SENTRY_DSN) {
+  console.warn(`[build] Warning: SENTRY_DSN_OBSIDIAN missing in ${envPath}. Sentry error tracking will be disabled.`);
 }
 
 const define = {
   SUPABASE_URL: JSON.stringify(SUPABASE_URL),
   SUPABASE_ANON_KEY: JSON.stringify(SUPABASE_ANON_KEY),
   INGEST_EMAIL_DOMAIN: JSON.stringify(INGEST_EMAIL_DOMAIN),
-  ENV: JSON.stringify(ENV)
+  ENV: JSON.stringify(ENV),
+  SENTRY_DSN: JSON.stringify(SENTRY_DSN),
+  SENTRY_RELEASE: JSON.stringify(SENTRY_RELEASE),
 };
 
 const entry = resolve(projectRoot, 'src/main.ts');
@@ -107,6 +121,24 @@ build(common).then(() => {
   const mapDst = join(outDir, 'main.js.map');
   if (existsSync(mapSrc)) {
     copyFileSync(mapSrc, mapDst);
+  }
+
+  // Upload source maps to Sentry for prod builds
+  if (mode === 'prod' && SENTRY_AUTH_TOKEN && SENTRY_DSN) {
+    console.log(`[build] Uploading source maps to Sentry (release: ${SENTRY_RELEASE})...`);
+    try {
+      execSync(
+        `npx sentry-cli releases new ${SENTRY_RELEASE} --org=dune-ventures --project=flowstate-obsidian`,
+        { stdio: 'inherit', env: { ...process.env, SENTRY_AUTH_TOKEN } }
+      );
+      execSync(
+        `npx sentry-cli sourcemaps upload --org=dune-ventures --project=flowstate-obsidian --release=${SENTRY_RELEASE} ${outDir}`,
+        { stdio: 'inherit', env: { ...process.env, SENTRY_AUTH_TOKEN } }
+      );
+      console.log(`[build] Source maps uploaded to Sentry`);
+    } catch (e) {
+      console.warn(`[build] Warning: Failed to upload source maps to Sentry:`, e.message);
+    }
   }
   // console.log(`[build] Built (${mode}) -> ${outfile}`);
   // console.log(`[build] Ready to symlink: ${outDir}`);
