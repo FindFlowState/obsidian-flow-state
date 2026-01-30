@@ -16,6 +16,8 @@ export default class FlowStatePlugin extends Plugin {
   // Internal poll intervals (seconds)
   private static readonly DESKTOP_POLL_SEC = 120;
   private static readonly MOBILE_POLL_SEC = 300;
+  // Sync lock to prevent concurrent syncs
+  private isSyncing = false;
 
   async onload() {
     // Initialize Sentry error tracking (prod builds only)
@@ -40,7 +42,7 @@ export default class FlowStatePlugin extends Plugin {
     if (BUILD_ENV === "local") {
       this.addCommand({
         id: "flow-state-reload-plugin",
-        name: "Reload Flow State plugin",
+        name: "Reload FlowState plugin",
         callback: async () => {
           try {
             const id = this.manifest.id;
@@ -52,7 +54,7 @@ export default class FlowStatePlugin extends Plugin {
             }
             await pm.disablePlugin(id);
             await pm.enablePlugin(id);
-            new Notice("Flow State reloaded");
+            new Notice("FlowState reloaded");
           } catch (e: any) {
             error("Reload failed", e);
             new Notice(`Reload error: ${e?.message ?? e}`);
@@ -78,12 +80,48 @@ export default class FlowStatePlugin extends Plugin {
           await exchangeFromObsidianParams(supabase, params, "obsidian://flow-state-oauth");
           // Register or reuse a per-vault/device Obsidian connection immediately after sign-in
           await ensureObsidianConnection(supabase, this.app);
-          new Notice("Flow State: signed in");
+          new Notice("FlowState: signed in");
           // Refresh settings UI to reflect signed-in state (button label + email field)
           this.settingsTab?.display();
         } catch (e: any) {
           error("OAuth exchange failed", e);
-          new Notice(`Flow State OAuth error: ${e?.message ?? e}`);
+          new Notice(`FlowState OAuth error: ${e?.message ?? e}`);
+        }
+      }
+    );
+
+    // Main deep link handler: obsidian://flow-state
+    // Supports: ?action=sync (trigger sync), ?project=<id> (open project editor)
+    this.registerObsidianProtocolHandler(
+      "flow-state",
+      async (params: Record<string, string>) => {
+        log("flow-state: triggered via deep link", params);
+
+        // Handle sync action - sync and open the last synced note
+        if (params.action === "sync") {
+          const syncedPaths = await this.syncNowAndGetPaths();
+          if (syncedPaths.length > 0) {
+            // Open the most recently synced note
+            const lastPath = syncedPaths[syncedPaths.length - 1];
+            await this.app.workspace.openLinkText(lastPath, "", false);
+          }
+          return;
+        }
+
+        // Default: open plugin settings
+        try {
+          // If project param provided, set deferred navigation before opening settings
+          const projectId = params.project;
+          if (projectId && this.settingsTab) {
+            this.settingsTab.setDeferredProject(projectId);
+          }
+
+          const setting = (this.app as any).setting;
+          await setting.open();
+          setting.openTabById(this.manifest.id);
+        } catch (e: any) {
+          error("Failed to open settings", e);
+          new Notice(`FlowState: ${e?.message ?? e}`);
         }
       }
     );
@@ -97,7 +135,7 @@ export default class FlowStatePlugin extends Plugin {
   }
 
   setStatus(txt: string) {
-    if (this.statusEl) this.statusEl.setText(`Flow State: ${txt}`);
+    if (this.statusEl) this.statusEl.setText(`FlowState: ${txt}`);
   }
 
   isMobile(): boolean {
@@ -128,34 +166,50 @@ export default class FlowStatePlugin extends Plugin {
   }
 
   async syncNow() {
+    await this.syncNowAndGetPaths();
+  }
+
+  /** Sync and return array of written file paths */
+  async syncNowAndGetPaths(): Promise<string[]> {
+    // Prevent concurrent syncs
+    if (this.isSyncing) {
+      log("syncNow: already syncing, skipping");
+      return [];
+    }
+    this.isSyncing = true;
+
     try {
       const hasUrl = !!(this.settings.supabaseUrl || DEFAULT_SUPABASE_URL);
       const hasKey = !!(this.settings.supabaseAnonKey || DEFAULT_SUPABASE_ANON_KEY);
       if (!hasUrl || !hasKey) {
-        new Notice("Flow State: configure Supabase in settings");
-        return;
+        new Notice("FlowState: configure Supabase in settings");
+        return [];
       }
 
       // Check if user is signed in
       const supabase = getSupabase(this.settings);
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) {
-        new Notice("Flow State: No account signed in");
-        return;
+        new Notice("FlowState: No account signed in");
+        return [];
       }
 
       this.setStatus("Syncing...");
-      const written = await this.syncOnce();
-      this.setStatus(`delivered ${written} item${written === 1 ? "" : "s"}`);
+      const paths = await this.syncOnce();
+      this.setStatus(`delivered ${paths.length} item${paths.length === 1 ? "" : "s"}`);
+      return paths;
     } catch (e: any) {
       error("Sync error", e);
       captureException(e, { context: "syncNow" });
       this.setStatus("Error");
-      new Notice(`Flow State sync error: ${e?.message ?? e}`);
+      new Notice(`FlowState sync error: ${e?.message ?? e}`);
+      return [];
+    } finally {
+      this.isSyncing = false;
     }
   }
 
-  async syncOnce(): Promise<number> {
+  async syncOnce(): Promise<string[]> {
     const supabase = getSupabase(this.settings);
 
     // Single-query join to filter Obsidian routes (only active routes)
@@ -171,7 +225,7 @@ export default class FlowStatePlugin extends Plugin {
     if (jErr) throw jErr;
     log(`syncOnce: fetched ${items?.length ?? 0} job(s)`);
 
-    let writeCount = 0;
+    const writtenPaths: string[] = [];
     for (const it of items ?? []) {
       log(`syncOnce: processing job ${it.id} route=${it.route_id}`);
       const content = it.formatted_content || it.transcribed_text;
@@ -190,10 +244,10 @@ export default class FlowStatePlugin extends Plugin {
       if (uErr) throw uErr;
       log(`syncOnce: acked job ${it.id} as delivered -> ${destination_url}`);
 
-      writeCount += 1;
+      writtenPaths.push(writtenPath);
     }
 
-    return writeCount;
+    return writtenPaths;
   }
 
   async writeJobToVault(it: Job, body: string): Promise<string> {

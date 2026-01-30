@@ -27,7 +27,20 @@ export async function atomicWrite(app: App, path: string, content: string) {
   if (parent) {
     await ensureFolder(app, parent);
   }
-  await app.vault.create(path, content);
+  try {
+    await app.vault.create(path, content);
+  } catch (e: any) {
+    // Handle race condition where file was created between exists check and create
+    if (e?.message?.includes("already exists") || e?.message?.includes("File already exists")) {
+      // File exists now, try to modify it instead
+      const f = app.vault.getAbstractFileByPath(path);
+      if (f instanceof TFile) {
+        await app.vault.modify(f, content);
+        return;
+      }
+    }
+    throw e; // Re-throw if it's a different error
+  }
 }
 
 export async function writeBinaryToAttachments(
@@ -39,7 +52,7 @@ export async function writeBinaryToAttachments(
   // Prefer user's default attachment folder configured in Obsidian, if available.
   // If it's a relative setting like "./attachments" (same folder as note), resolve
   // it against the provided baseFolder (destination note's folder).
-  // Fallback order: user setting -> baseFolder -> "Flow State/_attachments".
+  // Fallback order: user setting -> baseFolder -> "FlowState/_attachments".
   const userConfiguredFolder = (app.vault as any).getConfig?.("attachmentFolderPath") as string | undefined;
 
   let folder = "";
@@ -59,7 +72,7 @@ export async function writeBinaryToAttachments(
   } else if (baseFolder && baseFolder.length > 0) {
     folder = baseFolder;
   } else {
-    const base = "Flow State";
+    const base = "FlowState";
     const sub = options?.attachmentsSubdir ?? "_attachments";
     folder = `${base}/${sub}`;
   }

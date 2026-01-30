@@ -24,6 +24,11 @@ export const DEFAULT_SETTINGS: PluginSettings = {
 export class FlowStateSettingTab extends PluginSettingTab {
   // undefined -> list view; null -> new project; Route -> edit existing
   private editingRoute: Route | null | undefined = undefined;
+  // Deferred project ID for deep link navigation
+  private deferredProjectId: string | null = null;
+  // Generation counter to cancel stale async renders
+  private displayGeneration = 0;
+
   constructor(
     app: App,
     private plugin: FlowStatePlugin,
@@ -33,14 +38,58 @@ export class FlowStateSettingTab extends PluginSettingTab {
     super(app, plugin);
   }
 
+  /** Set a project ID to navigate to when display() is called */
+  setDeferredProject(projectId: string): void {
+    this.deferredProjectId = projectId;
+  }
+
+  /** Open the project editor for a specific route (called from deep link handler) */
+  openProjectEditor(route: Route | null): void {
+    this.editingRoute = route;
+    this.display();
+  }
+
   display(): void {
     const { containerEl } = this;
+    // Increment generation to cancel any stale async renders from previous display() calls
+    const generation = ++this.displayGeneration;
+
+    // Handle deferred project navigation from deep link
+    if (this.deferredProjectId) {
+      const projectId = this.deferredProjectId;
+      this.deferredProjectId = null; // Clear before async to prevent loops
+      containerEl.empty(); // Clear existing content while loading
+
+      (async () => {
+        try {
+          const supabase = getSupabase(this.settings);
+          const route = await fetchRouteById(supabase, projectId);
+          // Bail out if a newer display() was called
+          if (this.displayGeneration !== generation) return;
+          if (route) {
+            this.editingRoute = route;
+            this.display(); // Re-render with the project editor
+          } else {
+            new Notice("Project not found");
+            this.display(); // Show normal list view
+          }
+        } catch (e: any) {
+          // Bail out if a newer display() was called
+          if (this.displayGeneration !== generation) return;
+          console.error("Failed to load deferred project:", e);
+          new Notice(`Failed to load project: ${e?.message ?? e}`);
+          this.display(); // Show normal list view on error
+        }
+      })();
+      return; // Don't render yet, wait for async fetch
+    }
+
     containerEl.empty();
-    const titleEl = containerEl.createEl("h1", { text: "Flow State" });
+    const titleEl = containerEl.createEl("h1", { text: "FlowState" });
     titleEl.style.marginBottom = "8px";
     // Link to sign up / account creation (style like a description)
     const intro = containerEl.createEl("div");
-    intro.createEl("a", { text: "Flow State", href: "https://flowstate.example.com" });
+    intro.createEl("a", { text: "FlowState", href: "https://findflow.ai" });
     intro.appendText(
       " converts handwritten notes and audio recordings into Obsidian notes."
     );
@@ -54,12 +103,14 @@ export class FlowStateSettingTab extends PluginSettingTab {
     const authSection = containerEl.createDiv();
     const connectSetting = new Setting(authSection)
       .setName("Connect");
-    connectSetting.setDesc("Enter your Flow State account email");
+    connectSetting.setDesc("Enter your FlowState account email");
 
     (async () => {
       try {
         const supabase = getSupabase(this.settings);
         const session = await getCurrentSession(supabase);
+        // Bail out if a newer display() was called
+        if (this.displayGeneration !== generation) return;
         const isSignedIn = !!session;
         // Remember current user id for cache filtering on next open
         const currentUid = session?.user?.id ?? "";
@@ -125,6 +176,8 @@ export class FlowStateSettingTab extends PluginSettingTab {
       try {
         const supabase = getSupabase(this.settings);
         const session = await getCurrentSession(supabase);
+        // Bail out if a newer display() was called
+        if (this.displayGeneration !== generation) return;
         if (!session) return; // not signed in
 
         // If in editor mode, render the editor page and early-return
@@ -160,6 +213,9 @@ export class FlowStateSettingTab extends PluginSettingTab {
         header.settingEl.style.borderTop = "none";
         header.settingEl.style.paddingTop = "0";
         header.settingEl.style.marginTop = "0";
+        header.addButton((b) =>
+          b.setButtonText("Sync").onClick(() => this.plugin.syncNow())
+        );
         header.addButton((b) =>
           b.setButtonText("Refresh").onClick(() => this.display())
         );
@@ -231,12 +287,6 @@ export class FlowStateSettingTab extends PluginSettingTab {
               });
             });
           }
-          const actions = flowsListHost.createDiv({ cls: "fs-flows-actions" });
-          actions.style.display = "flex";
-          actions.style.justifyContent = "flex-end";
-          actions.style.marginTop = "12px";
-          const syncBtn = actions.createEl("button", { text: "Sync" });
-          syncBtn.addEventListener("click", () => this.plugin.syncNow());
         };
 
         // Render from cache immediately (only active projects belonging to the last known user)
@@ -256,6 +306,8 @@ export class FlowStateSettingTab extends PluginSettingTab {
 
         // Fetch fresh from Supabase, update cache, and re-render
         const rows: Route[] = await listObsidianRoutes(supabase);
+        // Bail out if a newer display() was called
+        if (this.displayGeneration !== generation) return;
         const valid: Route[] = [];
         const freshIds = new Set<string>();
         for (const r of rows) {
@@ -287,6 +339,8 @@ export class FlowStateSettingTab extends PluginSettingTab {
           }
         } catch {}
         await this.plugin.saveData(this.settings);
+        // Bail out if a newer display() was called
+        if (this.displayGeneration !== generation) return;
         renderRows(valid);
       } catch (e) {
         console.error(e);

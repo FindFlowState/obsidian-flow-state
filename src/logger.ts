@@ -1,6 +1,6 @@
 import { BUILD_ENV } from "./config";
 
-const prefix = "[Flow State]";
+const prefix = "[FlowState]";
 const enableInfo = BUILD_ENV === "local"; // only log info in local dev
 
 export function log(...args: any[]) {
