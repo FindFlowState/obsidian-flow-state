@@ -1,4 +1,4 @@
-// Sentry error tracking for Flow State Obsidian plugin
+// Sentry error tracking for FlowState Obsidian plugin
 import * as Sentry from "@sentry/browser";
 import { rewriteFramesIntegration } from "@sentry/browser";
 
@@ -50,10 +50,10 @@ export function initSentry(): void {
       },
     });
     initialized = true;
-    console.log("[Flow State] Sentry initialized");
+    console.log("[FlowState] Sentry initialized");
   } catch (e) {
     // Silently fail - don't let Sentry initialization break the plugin
-    console.warn("[Flow State] Sentry initialization failed:", e);
+    console.warn("[FlowState] Sentry initialization failed:", e);
   }
 }
 

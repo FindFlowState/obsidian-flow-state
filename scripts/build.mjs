@@ -8,9 +8,10 @@ import { execSync } from 'child_process';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-// Determine mode
+// Determine mode and flags
 const modeArg = process.argv.find(a => a.startsWith('--mode='));
 const mode = modeArg ? modeArg.split('=')[1] : 'local'; // default local
+const skipSentry = process.argv.includes('--skip-sentry');
 
 // Resolve env file path
 const projectRoot = resolve(__dirname, '..'); // apps/obsidian_plugin
@@ -123,8 +124,8 @@ build(common).then(() => {
     copyFileSync(mapSrc, mapDst);
   }
 
-  // Upload source maps to Sentry for prod builds
-  if (mode === 'prod' && SENTRY_AUTH_TOKEN && SENTRY_DSN) {
+  // Upload source maps to Sentry for prod builds (skip with --skip-sentry)
+  if (mode === 'prod' && SENTRY_AUTH_TOKEN && SENTRY_DSN && !skipSentry) {
     console.log(`[build] Uploading source maps to Sentry (release: ${SENTRY_RELEASE})...`);
     try {
       execSync(

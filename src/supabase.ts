@@ -45,7 +45,7 @@ export async function exchangeCodeFromUrl(supabase: SupabaseClient, url: string)
 export async function exchangeFromObsidianParams(
   supabase: SupabaseClient,
   params: Record<string, string>,
-  redirectUri = "obsidian://flow-state-oauth"
+  redirectUri = "obsidian://flow-state"
 ) {
   // If hash contains access_token/refresh_token, set session directly (Magic Link)
   const hash = params["hash"] ?? "";
@@ -253,4 +253,28 @@ export async function deleteRoute(
     .update({ is_active: false })
     .eq("id", routeId);
   if (error) throw error;
+}
+
+// -------- User credits helpers --------
+export type UserCredits = {
+  subscription_credits: number;
+  purchased_credits: number;
+};
+
+export async function fetchUserCredits(
+  supabase: SupabaseClient<Database>
+): Promise<UserCredits | null> {
+  const { data: userData, error: userErr } = await supabase.auth.getUser();
+  if (userErr) throw userErr;
+  const uid = userData.user?.id;
+  if (!uid) throw new Error("Not signed in");
+
+  const { data, error } = await supabase
+    .from("users")
+    .select("subscription_credits, purchased_credits")
+    .eq("id", uid)
+    .single();
+
+  if (error) throw error;
+  return data as UserCredits;
 }
