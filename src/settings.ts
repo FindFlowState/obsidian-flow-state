@@ -96,9 +96,9 @@ export class FlowStateSettingTab extends PluginSettingTab {
     // How it works bullets (will be hidden when signed in)
     const bulletsSection = containerEl.createDiv({ cls: "fs-onboarding-bullets" });
     const bullets = [
-      "Take a photo, record audio, or send an email",
-      "FlowState transcribes and enriches with AI",
-      "Notes sync automatically to your vault",
+      "Upload your handwriting or voice note to the FlowState app. Take a photo, record audio, or send an email.",
+      "FlowState transcribes your note and enriches it with AI. For example, it can translate, summarize, or extract action items.",
+      "Notes sync automatically to your vault.",
     ];
     const bulletList = bulletsSection.createEl("ul");
     bulletList.style.margin = "0 0 20px 0";
