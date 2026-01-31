@@ -87,23 +87,36 @@ export class FlowStateSettingTab extends PluginSettingTab {
     containerEl.empty();
     const titleEl = containerEl.createEl("h1", { text: "FlowState" });
     titleEl.style.marginBottom = "8px";
-    // Link to sign up / account creation (style like a description)
+    // Intro text
     const intro = containerEl.createEl("div");
-    intro.createEl("a", { text: "FlowState", href: "https://findflow.ai" });
-    intro.appendText(
-      " converts handwritten notes and audio recordings into Obsidian notes."
-    );
-    intro.style.fontSize = "0.85em";
-    // intro.style.color = "var(--text-muted)";
-    intro.style.marginBottom = "24px";
-    
+    intro.appendText("Turn handwritten notes and voice memos into Obsidian notes.");
+    intro.style.fontSize = "0.9em";
+    intro.style.marginBottom = "16px";
+
+    // How it works bullets (will be hidden when signed in)
+    const bulletsSection = containerEl.createDiv({ cls: "fs-onboarding-bullets" });
+    const bullets = [
+      "Take a photo, record audio, or send an email",
+      "FlowState transcribes and enriches with AI",
+      "Notes sync automatically to your vault",
+    ];
+    const bulletList = bulletsSection.createEl("ul");
+    bulletList.style.margin = "0 0 20px 0";
+    bulletList.style.paddingLeft = "20px";
+    bulletList.style.fontSize = "0.85em";
+    bulletList.style.color = "var(--text-muted)";
+    for (const bullet of bullets) {
+      const li = bulletList.createEl("li", { text: bullet });
+      li.style.marginBottom = "4px";
+    }
+
     // Unified connect section: email + connect/logout button
     // Place both rows inside a fixed wrapper so async rendering preserves order
     let emailValue = "";
     const authSection = containerEl.createDiv();
     const connectSetting = new Setting(authSection)
-      .setName("Account");
-    connectSetting.setDesc("Enter your FlowState account email");
+      .setName("Sign In");
+    connectSetting.setDesc("Enter your email to get started");
 
     (async () => {
       try {
@@ -123,6 +136,8 @@ export class FlowStateSettingTab extends PluginSettingTab {
         if (isSignedIn) {
           const signedInEmail = session?.user?.email ?? "";
           emailValue = signedInEmail;
+          // Hide onboarding bullets when signed in
+          bulletsSection.style.display = "none";
           // Show prominent connected status
           connectSetting.setName("Account");
           connectSetting.setDesc("");
@@ -140,7 +155,6 @@ export class FlowStateSettingTab extends PluginSettingTab {
           const statusText = statusEl.createSpan({ text: `Connected as ${signedInEmail}` });
           statusText.style.color = "var(--text-muted)";
         } else {
-          connectSetting.setDesc("Enter your FlowState account email");
           // Create email field for sign-in
           connectSetting.addText((t) => {
             t.setPlaceholder("you@example.com");
