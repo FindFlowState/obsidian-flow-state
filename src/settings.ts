@@ -92,7 +92,7 @@ export class FlowStateSettingTab extends PluginSettingTab {
     titleEl.style.marginBottom = "8px";
     // Intro text
     const intro = containerEl.createEl("div");
-    intro.appendText("Turn handwritten notes and voice memos into Obsidian notes.");
+    intro.appendText("Turn handwritten notes and voice memos into Obsidian files.");
     intro.style.fontSize = "0.9em";
     intro.style.marginBottom = "16px";
 
@@ -101,7 +101,7 @@ export class FlowStateSettingTab extends PluginSettingTab {
     const bullets = [
       "Upload your handwriting or voice note to the FlowState app. Take a photo, record audio, or send an email.",
       "FlowState transcribes your note and enriches it with AI. For example, it can translate, summarize, or extract action items.",
-      "Notes sync automatically to your vault.",
+      "Notes sync automatically to your vault. The original note is also saved as an attachment.",
     ];
     const bulletList = bulletsSection.createEl("ul");
     bulletList.style.margin = "0 0 12px 0";
