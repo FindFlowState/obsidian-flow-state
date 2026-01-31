@@ -160,6 +160,9 @@ export class FlowStateSettingTab extends PluginSettingTab {
                 return;
               }
               if (isSignedIn) {
+                // Confirm before logging out
+                const confirmLogout = window.confirm("Are you sure you want to log out of FlowState?");
+                if (!confirmLogout) return;
                 await supaSignOut(supabase);
                 // Clear cached routes and user id on logout so we don't show stale data
                 this.settings.routes = {};
@@ -259,12 +262,12 @@ export class FlowStateSettingTab extends PluginSettingTab {
               .setName(r.name)
               .setDesc(`Destination: ${r.destination_location}`);
             // Style project items with border and padding
-            (ui as any).settingEl.style.border = "1px solid var(--background-modifier-border)";
-            (ui as any).settingEl.style.borderRadius = "6px";
-            (ui as any).settingEl.style.padding = "12px";
-            (ui as any).settingEl.style.marginBottom = "8px";
-            if ((ui as any).nameEl) (ui as any).nameEl.style.fontSize = "1.0em";
-            if ((ui as any).descEl) (ui as any).descEl.style.color = "var(--text-muted)";
+            ui.settingEl.style.border = "1px solid var(--background-modifier-border)";
+            ui.settingEl.style.borderRadius = "6px";
+            ui.settingEl.style.padding = "12px";
+            ui.settingEl.style.marginBottom = "8px";
+            ui.nameEl.style.fontSize = "1.0em";
+            ui.descEl.style.color = "var(--text-muted)";
             ui.addButton((b) =>
               b.setButtonText("Edit").onClick(async () => {
                 try {
@@ -311,12 +314,12 @@ export class FlowStateSettingTab extends PluginSettingTab {
 
         // Render from cache immediately (only active projects belonging to the last known user)
         const uid = this.settings.lastUserId || null;
-        const cachedAll = Object.values(this.settings.routes || {});
+        const cachedAll: Route[] = Object.values(this.settings.routes || {});
         const cachedForUser = uid
-          ? cachedAll.filter((r: any) => r.user_id === uid && r.is_active !== false)
+          ? cachedAll.filter((r) => r.user_id === uid && r.is_active !== false)
           : [];
         // Sort cached routes by id ascending to match the server query order
-        cachedForUser.sort((a: any, b: any) => (a.id > b.id ? 1 : a.id < b.id ? -1 : 0));
+        cachedForUser.sort((a, b) => (a.id > b.id ? 1 : a.id < b.id ? -1 : 0));
         if (cachedForUser.length > 0) {
           renderRows(cachedForUser as Route[]);
         } else {
@@ -383,6 +386,11 @@ export class FlowStateSettingTab extends PluginSettingTab {
         const creditsTitle = creditsHeaderRow.createEl("h2", { text: "Credits" });
         creditsTitle.style.fontSize = "1.5em";
         creditsTitle.style.margin = "0";
+        // Badge to show total credits in collapsed state
+        const creditsBadge = creditsHeaderRow.createSpan({ text: "" });
+        creditsBadge.style.fontSize = "0.85em";
+        creditsBadge.style.color = "var(--text-muted)";
+        creditsBadge.style.marginLeft = "8px";
 
         const creditsBody = creditsSection.createDiv();
         let creditsOpen = false;
@@ -409,6 +417,9 @@ export class FlowStateSettingTab extends PluginSettingTab {
 
           if (credits) {
             const total = (credits.subscription_credits ?? 0) + (credits.purchased_credits ?? 0);
+            // Update collapsed header badge with total
+            creditsBadge.setText(`(${total})`);
+            creditsBadge.style.display = "";
 
             const totalSetting = new Setting(creditsHost)
               .setName("Total Credits")
