@@ -104,7 +104,7 @@ export class FlowStateSettingTab extends PluginSettingTab {
       "Notes sync automatically to your vault.",
     ];
     const bulletList = bulletsSection.createEl("ul");
-    bulletList.style.margin = "0 0 20px 0";
+    bulletList.style.margin = "0 0 12px 0";
     bulletList.style.paddingLeft = "20px";
     bulletList.style.fontSize = "0.85em";
     bulletList.style.color = "var(--text-muted)";
@@ -112,6 +112,12 @@ export class FlowStateSettingTab extends PluginSettingTab {
       const li = bulletList.createEl("li", { text: bullet });
       li.style.marginBottom = "4px";
     }
+    // Learn more link
+    const learnMoreEl = bulletsSection.createDiv();
+    learnMoreEl.style.marginBottom = "20px";
+    learnMoreEl.style.fontSize = "0.85em";
+    const learnMoreLink = learnMoreEl.createEl("a", { text: "Learn more at findflow.ai →", href: "https://findflow.ai" });
+    learnMoreLink.style.color = "var(--text-muted)";
 
     // Unified connect section: email + connect/logout button
     // Place both rows inside a fixed wrapper so async rendering preserves order
