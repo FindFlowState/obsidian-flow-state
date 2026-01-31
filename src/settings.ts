@@ -115,7 +115,7 @@ export class FlowStateSettingTab extends PluginSettingTab {
     let emailValue = "";
     const authSection = containerEl.createDiv();
     const connectSetting = new Setting(authSection)
-      .setName("Sign In");
+      .setName("Sign Up / Sign In");
     connectSetting.setDesc("Enter your email to get started");
 
     (async () => {
