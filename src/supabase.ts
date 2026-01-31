@@ -254,3 +254,27 @@ export async function deleteRoute(
     .eq("id", routeId);
   if (error) throw error;
 }
+
+// -------- User credits helpers --------
+export type UserCredits = {
+  subscription_credits: number;
+  purchased_credits: number;
+};
+
+export async function fetchUserCredits(
+  supabase: SupabaseClient<Database>
+): Promise<UserCredits | null> {
+  const { data: userData, error: userErr } = await supabase.auth.getUser();
+  if (userErr) throw userErr;
+  const uid = userData.user?.id;
+  if (!uid) throw new Error("Not signed in");
+
+  const { data, error } = await supabase
+    .from("users")
+    .select("subscription_credits, purchased_credits")
+    .eq("id", uid)
+    .single();
+
+  if (error) throw error;
+  return data as UserCredits;
+}

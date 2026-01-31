@@ -2,7 +2,7 @@ import { App, PluginSettingTab, Setting, Notice, ButtonComponent } from "obsidia
 import type FlowStatePlugin from "./main";
 import type { Route } from "@flowstate/supabase-types";
 import { DEFAULT_SUPABASE_URL, DEFAULT_SUPABASE_ANON_KEY } from "./config";
-import { getSupabase, getCurrentSession, signOut as supaSignOut, sendMagicLink, listObsidianRoutes, deleteRoute, fetchRouteById } from "./supabase";
+import { getSupabase, getCurrentSession, signOut as supaSignOut, sendMagicLink, listObsidianRoutes, deleteRoute, fetchRouteById, fetchUserCredits } from "./supabase";
 import { renderRouteEditor } from "./routeEditor";
 
 export type PluginSettings = {
@@ -342,6 +342,67 @@ export class FlowStateSettingTab extends PluginSettingTab {
         // Bail out if a newer display() was called
         if (this.displayGeneration !== generation) return;
         renderRows(valid);
+
+        // Credits section
+        const creditsDivider = containerEl.createDiv();
+        creditsDivider.style.borderTop = "1px solid var(--background-modifier-border)";
+        creditsDivider.style.margin = "16px 0 6px 0";
+        const creditsHeader = containerEl.createEl("h2", { text: "Credits" });
+        creditsHeader.style.fontSize = "1.5em";
+        creditsHeader.style.marginTop = "18px";
+        creditsHeader.style.marginBottom = "6px";
+
+        const creditsHost = containerEl.createDiv();
+        const creditsLoading = creditsHost.createDiv({ cls: "setting-item-description" });
+        creditsLoading.setText("Loading credits…");
+
+        try {
+          const credits = await fetchUserCredits(supabase);
+          // Bail out if a newer display() was called
+          if (this.displayGeneration !== generation) return;
+          creditsHost.empty();
+
+          if (credits) {
+            const total = (credits.subscription_credits ?? 0) + (credits.purchased_credits ?? 0);
+
+            const totalSetting = new Setting(creditsHost)
+              .setName("Total Credits")
+              .setDesc(String(total));
+            totalSetting.settingEl.style.borderTop = "none";
+            totalSetting.settingEl.style.padding = "6px 0";
+
+            const subscriptionSetting = new Setting(creditsHost)
+              .setName("Subscription Credits")
+              .setDesc(`${credits.subscription_credits ?? 0} (reset monthly)`);
+            subscriptionSetting.settingEl.style.borderTop = "none";
+            subscriptionSetting.settingEl.style.padding = "6px 0";
+
+            const topupSetting = new Setting(creditsHost)
+              .setName("Top-up Credits")
+              .setDesc(`${credits.purchased_credits ?? 0} (never expire)`);
+            topupSetting.settingEl.style.borderTop = "none";
+            topupSetting.settingEl.style.padding = "6px 0";
+
+            const manageSetting = new Setting(creditsHost);
+            manageSetting.settingEl.style.borderTop = "none";
+            manageSetting.settingEl.style.padding = "6px 0";
+            manageSetting.addButton((b) =>
+              b.setCta()
+                .setButtonText("Manage Credits")
+                .onClick(() => {
+                  window.open("https://app.findflow.ai/credits", "_blank");
+                })
+            );
+          }
+        } catch (creditsErr) {
+          // Bail out if a newer display() was called
+          if (this.displayGeneration !== generation) return;
+          console.error("Failed to load credits:", creditsErr);
+          creditsHost.empty();
+          const errorDiv = creditsHost.createDiv({ cls: "setting-item-description" });
+          errorDiv.setText("Failed to load credits");
+          errorDiv.style.color = "var(--text-error)";
+        }
       } catch (e) {
         console.error(e);
       }
