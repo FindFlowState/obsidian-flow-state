@@ -18,6 +18,9 @@ export default class FlowStatePlugin extends Plugin {
   private static readonly MOBILE_POLL_SEC = 300;
   // Sync lock to prevent concurrent syncs
   private isSyncing = false;
+  // Cooldown for "not signed in" notice to prevent spam (ms)
+  private static readonly NOT_SIGNED_IN_COOLDOWN_MS = 10000;
+  private lastNotSignedInNotice = 0;
 
   async onload() {
     // Initialize Sentry error tracking (prod builds only)
@@ -119,6 +122,9 @@ export default class FlowStatePlugin extends Plugin {
           const setting = (this.app as any).setting;
           await setting.open();
           setting.openTabById(this.manifest.id);
+          // Force display refresh to handle deferred project and prevent duplicate renders
+          // when settings are already open (openTabById may not trigger display)
+          this.settingsTab?.display();
         } catch (e: any) {
           error("Failed to open settings", e);
           new Notice(`FlowState: ${e?.message ?? e}`);
@@ -190,7 +196,12 @@ export default class FlowStatePlugin extends Plugin {
       const supabase = getSupabase(this.settings);
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) {
-        new Notice("FlowState: No account signed in");
+        // Only show notice if cooldown has passed to prevent spam
+        const now = Date.now();
+        if (now - this.lastNotSignedInNotice > FlowStatePlugin.NOT_SIGNED_IN_COOLDOWN_MS) {
+          this.lastNotSignedInNotice = now;
+          new Notice("FlowState: No account signed in");
+        }
         return [];
       }
 
