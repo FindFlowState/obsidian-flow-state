@@ -85,7 +85,10 @@ export class FlowStateSettingTab extends PluginSettingTab {
     }
 
     containerEl.empty();
-    const titleEl = containerEl.createEl("h1", { text: "FlowState" });
+    const titleEl = containerEl.createEl("h1");
+    const titleLink = titleEl.createEl("a", { text: "FlowState", href: "https://findflow.ai" });
+    titleLink.style.textDecoration = "none";
+    titleLink.style.color = "inherit";
     titleEl.style.marginBottom = "8px";
     // Intro text
     const intro = containerEl.createEl("div");
