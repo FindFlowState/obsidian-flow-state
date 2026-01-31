@@ -254,7 +254,7 @@ export class FlowStateSettingTab extends PluginSettingTab {
           flowsListHost.empty();
           if (routes.length === 0) {
             const empty = flowsListHost.createDiv({ cls: "setting-item-description" });
-            empty.setText("No projects yet. Click 'Add Project' to create one.");
+            empty.setText("Create your first project. Projects tell FlowState where to save different types of notes.");
             return;
           }
           for (const r of routes) {
