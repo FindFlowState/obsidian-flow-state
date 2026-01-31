@@ -92,7 +92,7 @@ export class FlowStateSettingTab extends PluginSettingTab {
     titleEl.style.marginBottom = "8px";
     // Intro text
     const intro = containerEl.createEl("div");
-    intro.appendText("Turn handwritten notes and voice memos into Obsidian files.");
+    intro.appendText("Integrate handwritten notes and voice recordings into Obsidian.");
     intro.style.fontSize = "0.9em";
     intro.style.marginBottom = "16px";
 
