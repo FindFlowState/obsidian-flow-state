@@ -102,7 +102,7 @@ export class FlowStateSettingTab extends PluginSettingTab {
     let emailValue = "";
     const authSection = containerEl.createDiv();
     const connectSetting = new Setting(authSection)
-      .setName("Connect");
+      .setName("Account");
     connectSetting.setDesc("Enter your FlowState account email");
 
     (async () => {
@@ -119,18 +119,35 @@ export class FlowStateSettingTab extends PluginSettingTab {
           await this.plugin.saveData(this.settings);
         }
 
-        // Create email field within the same setting row
-        connectSetting.addText((t) => {
-            const signedInEmail = session?.user?.email ?? "";
-            if (isSignedIn) {
-              t.setValue(signedInEmail);
-              t.setDisabled(true);
-              emailValue = signedInEmail;
-            } else {
-              t.setPlaceholder("you@example.com");
-              t.onChange((v) => { emailValue = v.trim(); });
-            }
+        // Update UI based on sign-in state
+        if (isSignedIn) {
+          const signedInEmail = session?.user?.email ?? "";
+          emailValue = signedInEmail;
+          // Show prominent connected status
+          connectSetting.setName("Account");
+          connectSetting.setDesc("");
+          // Add status indicator
+          const statusEl = connectSetting.descEl.createDiv();
+          statusEl.style.display = "flex";
+          statusEl.style.alignItems = "center";
+          statusEl.style.gap = "6px";
+          const dot = statusEl.createSpan();
+          dot.style.width = "8px";
+          dot.style.height = "8px";
+          dot.style.borderRadius = "50%";
+          dot.style.backgroundColor = "var(--color-green)";
+          dot.style.display = "inline-block";
+          const statusText = statusEl.createSpan({ text: `Connected as ${signedInEmail}` });
+          statusText.style.color = "var(--text-muted)";
+        } else {
+          connectSetting.setDesc("Enter your FlowState account email");
+          // Create email field for sign-in
+          connectSetting.addText((t) => {
+            t.setPlaceholder("you@example.com");
+            t.onChange((v) => { emailValue = v.trim(); });
           });
+        }
+
         const actionRow = connectSetting.controlEl.createDiv();
         const btn = new ButtonComponent(actionRow);
         btn.setButtonText(isSignedIn ? "Log out" : "Connect");
@@ -241,8 +258,11 @@ export class FlowStateSettingTab extends PluginSettingTab {
             const ui = new Setting(flowsListHost)
               .setName(r.name)
               .setDesc(`Destination: ${r.destination_location}`);
-            (ui as any).settingEl.style.borderTop = "none";
-            (ui as any).settingEl.style.padding = "6px 0";
+            // Style project items with border and padding
+            (ui as any).settingEl.style.border = "1px solid var(--background-modifier-border)";
+            (ui as any).settingEl.style.borderRadius = "6px";
+            (ui as any).settingEl.style.padding = "12px";
+            (ui as any).settingEl.style.marginBottom = "8px";
             if ((ui as any).nameEl) (ui as any).nameEl.style.fontSize = "1.0em";
             if ((ui as any).descEl) (ui as any).descEl.style.color = "var(--text-muted)";
             ui.addButton((b) =>
@@ -343,16 +363,41 @@ export class FlowStateSettingTab extends PluginSettingTab {
         if (this.displayGeneration !== generation) return;
         renderRows(valid);
 
-        // Credits section
+        // Credits section (collapsible, collapsed by default)
         const creditsDivider = containerEl.createDiv();
         creditsDivider.style.borderTop = "1px solid var(--background-modifier-border)";
         creditsDivider.style.margin = "16px 0 6px 0";
-        const creditsHeader = containerEl.createEl("h2", { text: "Credits" });
-        creditsHeader.style.fontSize = "1.5em";
-        creditsHeader.style.marginTop = "18px";
-        creditsHeader.style.marginBottom = "6px";
 
-        const creditsHost = containerEl.createDiv();
+        // Collapsible header
+        const creditsSection = containerEl.createDiv({ cls: "fs-credits-section" });
+        const creditsHeaderRow = creditsSection.createDiv();
+        creditsHeaderRow.style.display = "flex";
+        creditsHeaderRow.style.alignItems = "center";
+        creditsHeaderRow.style.gap = "6px";
+        creditsHeaderRow.style.cursor = "pointer";
+        creditsHeaderRow.style.marginTop = "18px";
+        creditsHeaderRow.style.marginBottom = "6px";
+
+        const creditsArrow = creditsHeaderRow.createSpan({ text: "▸" });
+        creditsArrow.style.fontSize = "0.9em";
+        const creditsTitle = creditsHeaderRow.createEl("h2", { text: "Credits" });
+        creditsTitle.style.fontSize = "1.5em";
+        creditsTitle.style.margin = "0";
+
+        const creditsBody = creditsSection.createDiv();
+        let creditsOpen = false;
+
+        const updateCreditsVisibility = () => {
+          creditsBody.style.display = creditsOpen ? "" : "none";
+          creditsArrow.textContent = creditsOpen ? "▾" : "▸";
+        };
+        creditsHeaderRow.addEventListener("click", () => {
+          creditsOpen = !creditsOpen;
+          updateCreditsVisibility();
+        });
+        updateCreditsVisibility();
+
+        const creditsHost = creditsBody.createDiv();
         const creditsLoading = creditsHost.createDiv({ cls: "setting-item-description" });
         creditsLoading.setText("Loading credits…");
 

@@ -138,13 +138,20 @@ export function renderRouteEditor(
   const headerRow = containerEl.createDiv({ cls: "fs-editor-header" });
   headerRow.style.display = "flex";
   headerRow.style.alignItems = "center";
-  headerRow.style.gap = "8px";
+  headerRow.style.gap = "12px";
+  headerRow.style.marginBottom = "16px";
   const backBtnEl = headerRow.createEl("button", { text: "←" });
+  backBtnEl.style.padding = "4px 10px";
+  backBtnEl.style.fontSize = "1em";
+  backBtnEl.style.lineHeight = "1";
+  backBtnEl.style.cursor = "pointer";
   backBtnEl.addEventListener("click", () => onBack());
   const keyHandler = (e: KeyboardEvent) => { if (e.key === "Escape") { onBack(); } };
   window.addEventListener("keydown", keyHandler, { once: true });
-  const title = headerRow.createEl("h2", { text: existing ? "Edit Project" : "Add Project" });
+  const titleText = existing ? `Edit: ${existing.name}` : "Add Project";
+  const title = headerRow.createEl("h2", { text: titleText });
   title.style.fontSize = "1.6em";
+  title.style.margin = "0";
 
   // Name
   const nameSetting = new Setting(containerEl)
@@ -447,31 +454,21 @@ export function renderRouteEditor(
         if (!(dest instanceof TFolder)) throw new Error("Destination must be a folder path");
       }
       const supabase = getSupabase(plugin.settings);
-      if (existing) {
-        const row = await updateRoute(supabase, existing.id, {
-          name,
-          slug,
-          destination_location: destinationFolder,
-          append_to_existing: appendToExisting,
-          include_original_file: includeOriginalFile,
-          custom_instructions: customInstructions || null,
-          use_ai_title: true, // Always use AI-generated titles
-          ai_title_instructions: aiTitleInstructions || null,
-        });
-        await onSaved(row);
-      } else {
-        const row = await createProject(supabase, app, {
-          name,
-          // Do not pass slug on create; backend will generate
-          destination_location: destinationFolder,
-          append_to_existing: appendToExisting,
-          include_original_file: includeOriginalFile,
-          custom_instructions: customInstructions || null,
-          use_ai_title: true, // Always use AI-generated titles
-          ai_title_instructions: aiTitleInstructions || null,
-        });
-        await onSaved(row);
-      }
+      // Common project data for both create and update
+      const projectData = {
+        name,
+        destination_location: destinationFolder,
+        append_to_existing: appendToExisting,
+        include_original_file: includeOriginalFile,
+        custom_instructions: customInstructions || null,
+        use_ai_title: true, // Always use AI-generated titles
+        ai_title_instructions: aiTitleInstructions || null,
+      };
+
+      const row = existing
+        ? await updateRoute(supabase, existing.id, { ...projectData, slug })
+        : await createProject(supabase, app, projectData);
+      await onSaved(row);
       onBack();
     } catch (e: any) {
       console.error(e);

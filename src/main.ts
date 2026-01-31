@@ -19,7 +19,7 @@ export default class FlowStatePlugin extends Plugin {
   // Sync lock to prevent concurrent syncs
   private isSyncing = false;
   // Cooldown for "not signed in" notice to prevent spam (ms)
-  private static readonly NOT_SIGNED_IN_COOLDOWN_MS = 10000;
+  private static readonly NOT_SIGNED_IN_COOLDOWN_MS = 3000;
   private lastNotSignedInNotice = 0;
 
   async onload() {
