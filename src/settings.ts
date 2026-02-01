@@ -49,6 +49,12 @@ export class FlowStateSettingTab extends PluginSettingTab {
     this.display();
   }
 
+  /** Open the Add Project screen (called from deep link handler) */
+  openNewProject(): void {
+    this.editingRoute = null;
+    this.display();
+  }
+
   display(): void {
     const { containerEl } = this;
     // Increment generation to cancel any stale async renders from previous display() calls

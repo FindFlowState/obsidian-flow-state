@@ -108,6 +108,20 @@ export default class FlowStatePlugin extends Plugin {
           return;
         }
 
+        // Handle new-project action - open Add Project screen
+        if (params.action === "new-project") {
+          try {
+            const setting = (this.app as any).setting;
+            await setting.open();
+            setting.openTabById(this.manifest.id);
+            this.settingsTab?.openNewProject();
+          } catch (e: any) {
+            error("Failed to open new project screen", e);
+            new Notice(`FlowState: ${e?.message ?? e}`);
+          }
+          return;
+        }
+
         // Default: open plugin settings
         try {
           const projectId = params.project;
