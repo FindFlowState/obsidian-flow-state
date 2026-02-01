@@ -72,7 +72,6 @@ export default class FlowStatePlugin extends Plugin {
             const supabase = getSupabase(this.settings);
             await exchangeFromObsidianParams(supabase, params, "obsidian://flow-state");
             await ensureObsidianConnection(supabase, this.app);
-            new Notice("FlowState: signed in");
             this.settingsTab?.display();
           } catch (e: any) {
             error("OAuth exchange failed", e);
