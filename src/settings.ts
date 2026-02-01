@@ -167,46 +167,56 @@ export class FlowStateSettingTab extends PluginSettingTab {
           connectSetting.addText((t) => {
             t.setPlaceholder("you@example.com");
             t.onChange((v) => { emailValue = v.trim(); });
+            // Allow Enter key to submit
+            t.inputEl.addEventListener("keydown", (e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                submitAuth();
+              }
+            });
           });
         }
+
+        // Shared auth submit handler
+        const submitAuth = async () => {
+          try {
+            const url = DEFAULT_SUPABASE_URL;
+            const key = DEFAULT_SUPABASE_ANON_KEY;
+            if (!url || !key) {
+              new Notice("Supabase config missing. Rebuild plugin with env set.");
+              return;
+            }
+            if (isSignedIn) {
+              // Confirm before logging out
+              const confirmLogout = window.confirm("Are you sure you want to log out of FlowState?");
+              if (!confirmLogout) return;
+              await supaSignOut(supabase);
+              // Clear cached routes and user id on logout so we don't show stale data
+              this.settings.routes = {};
+              this.settings.lastUserId = "";
+              await this.plugin.saveData(this.settings);
+              new Notice("Signed out");
+              this.display();
+              return;
+            }
+            // Magic Link flow requires an email
+            if (!emailValue) {
+              new Notice("Enter your email to receive a Magic Link");
+              return;
+            }
+            const redirectTo = "obsidian://flow-state";
+            await sendMagicLink(supabase, emailValue, redirectTo);
+            new Notice(`Magic link sent to ${emailValue}`);
+          } catch (e: any) {
+            console.error(e);
+            new Notice(`${isSignedIn ? "Sign-out" : "Magic link"} failed: ${e?.message ?? e}`);
+          }
+        };
 
         const actionRow = connectSetting.controlEl.createDiv();
         const btn = new ButtonComponent(actionRow);
         btn.setButtonText(isSignedIn ? "Log out" : "Connect");
-        btn.onClick(async () => {
-            try {
-              const url = DEFAULT_SUPABASE_URL;
-              const key = DEFAULT_SUPABASE_ANON_KEY;
-              if (!url || !key) {
-                new Notice("Supabase config missing. Rebuild plugin with env set.");
-                return;
-              }
-              if (isSignedIn) {
-                // Confirm before logging out
-                const confirmLogout = window.confirm("Are you sure you want to log out of FlowState?");
-                if (!confirmLogout) return;
-                await supaSignOut(supabase);
-                // Clear cached routes and user id on logout so we don't show stale data
-                this.settings.routes = {};
-                this.settings.lastUserId = "";
-                await this.plugin.saveData(this.settings);
-                new Notice("Signed out");
-                this.display();
-                return;
-              }
-              // Magic Link flow requires an email
-              if (!emailValue) {
-                new Notice("Enter your email to receive a Magic Link");
-                return;
-              }
-              const redirectTo = "obsidian://flow-state";
-              await sendMagicLink(supabase, emailValue, redirectTo);
-              new Notice(`Magic link sent to ${emailValue}`);
-            } catch (e: any) {
-              console.error(e);
-              new Notice(`${isSignedIn ? "Sign-out" : "Magic link"} failed: ${e?.message ?? e}`);
-            }
-          });
+        btn.onClick(submitAuth);
       } catch (e) {
         // Surface minimal info but keep UI rendering
         console.error(e);
