@@ -118,7 +118,11 @@ export default class FlowStatePlugin extends Plugin {
           const setting = (this.app as any).setting;
           await setting.open();
           setting.openTabById(this.manifest.id);
-          this.settingsTab?.display();
+          // Only force refresh if no projectId - openTabById triggers display() internally,
+          // and calling it again would cancel the deferred project async fetch
+          if (!projectId) {
+            this.settingsTab?.display();
+          }
         } catch (e: any) {
           error("Failed to open settings", e);
           new Notice(`FlowState: ${e?.message ?? e}`);
