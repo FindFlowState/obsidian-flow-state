@@ -54,13 +54,15 @@ export default class FlowStatePlugin extends Plugin {
     // Unified deep link handler: obsidian://flow-state
     // Supports:
     //   - OAuth callback (hash with tokens, or code param)
-    //   - ?action=sync (trigger sync and open last synced note)
+    //   - ?cmd=sync (trigger sync and open last synced note)
+    //   - ?cmd=new-project (open Add Project screen)
     //   - ?project=<id> (open project editor)
     //   - (default) open plugin settings
+    // Note: Can't use "action" param - Obsidian automatically sets it to the handler name
     this.registerObsidianProtocolHandler(
       "flow-state",
       async (params: Record<string, string>) => {
-        log("flow-state: triggered via deep link", params);
+        log("deep-link handler triggered", params);
 
         // Handle OAuth callback (Magic Link with hash tokens, or PKCE with code)
         const hash = params["hash"] ?? "";
@@ -81,9 +83,10 @@ export default class FlowStatePlugin extends Plugin {
         }
 
         // Handle sync action - sync and open file
-        // ?action=sync - sync and open last synced note
-        // ?action=sync&job=<id> - sync and open specific job's file
-        if (params.action === "sync") {
+        // ?cmd=sync - sync and open last synced note
+        // ?cmd=sync&job=<id> - sync and open specific job's file
+        // Note: Can't use "action" param - Obsidian sets it to the handler name
+        if (params.cmd === "sync") {
           const targetJobId = params.job;
           const result = await this.syncWithLogs();
 
@@ -109,7 +112,8 @@ export default class FlowStatePlugin extends Plugin {
         }
 
         // Handle new-project action - open Add Project screen
-        if (params.action === "new-project") {
+        // Note: Can't use "action" param - Obsidian sets it to the handler name
+        if (params.cmd === "new-project") {
           try {
             const setting = (this.app as any).setting;
             await setting.open();
@@ -122,20 +126,24 @@ export default class FlowStatePlugin extends Plugin {
           return;
         }
 
-        // Default: open plugin settings
+        // Default: open plugin settings with optional project edit
         try {
           const projectId = params.project;
-          if (projectId && this.settingsTab) {
-            this.settingsTab.setDeferredProject(projectId);
-          }
 
           const setting = (this.app as any).setting;
           await setting.open();
           setting.openTabById(this.manifest.id);
-          // Only force refresh if no projectId - openTabById triggers display() internally,
-          // and calling it again would cancel the deferred project async fetch
-          if (!projectId) {
-            this.settingsTab?.display();
+
+          // Fetch and open project editor if projectId provided
+          // Do this AFTER opening settings to avoid race with openTabById's internal display() call
+          if (projectId && this.settingsTab) {
+            const supabase = getSupabase(this.settings);
+            const route = await fetchRouteById(supabase, projectId);
+            if (route) {
+              this.settingsTab.openProjectEditor(route);
+            } else {
+              new Notice("Project not found");
+            }
           }
         } catch (e: any) {
           error("Failed to open settings", e);
