@@ -85,14 +85,18 @@ export class FlowStateSettingTab extends PluginSettingTab {
     }
 
     containerEl.empty();
-    const titleEl = containerEl.createEl("h1");
-    const titleLink = titleEl.createEl("a", { text: "FlowState", href: "https://findflow.ai" });
-    titleLink.style.textDecoration = "none";
-    titleLink.style.color = "inherit";
+
+    // FlowState title (plain text, styled like other plugins)
+    const titleEl = containerEl.createEl("div", { text: "FlowState" });
+    titleEl.style.fontSize = "1.17em";
+    titleEl.style.fontWeight = "600";
     titleEl.style.marginBottom = "8px";
-    // Intro text
+
+    // Intro text with Learn more link on same line
     const intro = containerEl.createEl("div");
-    intro.appendText("Integrate handwritten notes and voice recordings into Obsidian.");
+    intro.appendText("Integrate handwritten notes and voice recordings into Obsidian. ");
+    const learnMoreLink = intro.createEl("a", { text: "Learn more →", href: "https://findflow.ai" });
+    learnMoreLink.style.color = "var(--text-muted)";
     intro.style.fontSize = "0.9em";
     intro.style.marginBottom = "16px";
 
@@ -112,12 +116,7 @@ export class FlowStateSettingTab extends PluginSettingTab {
       const li = bulletList.createEl("li", { text: bullet });
       li.style.marginBottom = "4px";
     }
-    // Learn more link
-    const learnMoreEl = bulletsSection.createDiv();
-    learnMoreEl.style.marginBottom = "20px";
-    learnMoreEl.style.fontSize = "0.85em";
-    const learnMoreLink = learnMoreEl.createEl("a", { text: "Learn more at findflow.ai →", href: "https://findflow.ai" });
-    learnMoreLink.style.color = "var(--text-muted)";
+    bulletsSection.style.marginBottom = "20px";
 
     // Unified connect section: email + connect/logout button
     // Place both rows inside a fixed wrapper so async rendering preserves order
@@ -200,7 +199,7 @@ export class FlowStateSettingTab extends PluginSettingTab {
                 new Notice("Enter your email to receive a Magic Link");
                 return;
               }
-              const redirectTo = "obsidian://flow-state-oauth";
+              const redirectTo = "obsidian://flow-state";
               await sendMagicLink(supabase, emailValue, redirectTo);
               new Notice(`Magic link sent to ${emailValue}`);
             } catch (e: any) {
@@ -225,6 +224,9 @@ export class FlowStateSettingTab extends PluginSettingTab {
 
         // If in editor mode, render the editor page and early-return
         if (this.editingRoute !== undefined) {
+          // Hide intro and bullets when in editor mode for a cleaner view
+          intro.style.display = "none";
+          bulletsSection.style.display = "none";
           renderRouteEditor(
             containerEl,
             this.app,
@@ -241,24 +243,45 @@ export class FlowStateSettingTab extends PluginSettingTab {
           return;
         }
 
-        // Add a subtle horizontal divider above the Projects section
-        const flowsDivider = containerEl.createDiv();
-        flowsDivider.style.borderTop = "1px solid var(--background-modifier-border)";
-        flowsDivider.style.margin = "16px 0 6px 0";
-        const flowsHeader = containerEl.createEl("h2", { text: "Projects" });
-        // Make header visually larger and add spacing
-        flowsHeader.style.fontSize = "1.5em";
-        flowsHeader.style.marginTop = "18px";
-        flowsHeader.style.marginBottom = "6px";
-        const header = new Setting(containerEl)
+        // Projects section (collapsible, open by default)
+        const projectsDivider = containerEl.createDiv();
+        projectsDivider.style.borderTop = "1px solid var(--background-modifier-border)";
+        projectsDivider.style.margin = "16px 0 6px 0";
+
+        const projectsSection = containerEl.createDiv({ cls: "fs-projects-section" });
+        const projectsHeaderRow = projectsSection.createDiv();
+        projectsHeaderRow.style.display = "flex";
+        projectsHeaderRow.style.alignItems = "center";
+        projectsHeaderRow.style.gap = "6px";
+        projectsHeaderRow.style.cursor = "pointer";
+        projectsHeaderRow.style.marginTop = "18px";
+        projectsHeaderRow.style.marginBottom = "6px";
+
+        const projectsArrow = projectsHeaderRow.createSpan({ text: "▾" });
+        projectsArrow.style.fontSize = "0.9em";
+        const projectsTitle = projectsHeaderRow.createEl("h2", { text: "Projects" });
+        projectsTitle.style.fontSize = "1.5em";
+        projectsTitle.style.margin = "0";
+
+        const projectsBody = projectsSection.createDiv();
+        let projectsOpen = true;
+
+        const updateProjectsVisibility = () => {
+          projectsBody.style.display = projectsOpen ? "" : "none";
+          projectsArrow.textContent = projectsOpen ? "▾" : "▸";
+        };
+        projectsHeaderRow.addEventListener("click", () => {
+          projectsOpen = !projectsOpen;
+          updateProjectsVisibility();
+        });
+        updateProjectsVisibility();
+
+        // Projects description and buttons
+        const header = new Setting(projectsBody)
           .setDesc("Projects describe how to transcribe and save your uploads.");
-        // Remove the default top border (horizontal rule) under the Flows header
         header.settingEl.style.borderTop = "none";
         header.settingEl.style.paddingTop = "0";
         header.settingEl.style.marginTop = "0";
-        header.addButton((b) =>
-          b.setButtonText("Sync").onClick(() => this.plugin.syncNow())
-        );
         header.addButton((b) =>
           b.setButtonText("Refresh").onClick(() => this.display())
         );
@@ -272,7 +295,7 @@ export class FlowStateSettingTab extends PluginSettingTab {
         );
 
         // Projects list host and renderer
-        const flowsListHost = containerEl.createDiv({ cls: "fs-flows-list" });
+        const flowsListHost = projectsBody.createDiv({ cls: "fs-flows-list" });
         const renderRows = (routes: Route[]) => {
           flowsListHost.empty();
           if (routes.length === 0) {
@@ -389,6 +412,117 @@ export class FlowStateSettingTab extends PluginSettingTab {
         if (this.displayGeneration !== generation) return;
         renderRows(valid);
 
+        // Sync section (collapsible, collapsed by default)
+        const syncDivider = containerEl.createDiv();
+        syncDivider.style.borderTop = "1px solid var(--background-modifier-border)";
+        syncDivider.style.margin = "16px 0 6px 0";
+
+        const syncSection = containerEl.createDiv({ cls: "fs-sync-section" });
+        const syncHeaderRow = syncSection.createDiv();
+        syncHeaderRow.style.display = "flex";
+        syncHeaderRow.style.alignItems = "center";
+        syncHeaderRow.style.gap = "6px";
+        syncHeaderRow.style.cursor = "pointer";
+        syncHeaderRow.style.marginTop = "18px";
+        syncHeaderRow.style.marginBottom = "6px";
+
+        const syncArrow = syncHeaderRow.createSpan({ text: "▸" });
+        syncArrow.style.fontSize = "0.9em";
+        const syncTitle = syncHeaderRow.createEl("h2", { text: "Sync" });
+        syncTitle.style.fontSize = "1.5em";
+        syncTitle.style.margin = "0";
+
+        const syncBody = syncSection.createDiv();
+        let syncOpen = false;
+
+        const updateSyncVisibility = () => {
+          syncBody.style.display = syncOpen ? "" : "none";
+          syncArrow.textContent = syncOpen ? "▾" : "▸";
+        };
+        syncHeaderRow.addEventListener("click", () => {
+          syncOpen = !syncOpen;
+          updateSyncVisibility();
+        });
+        updateSyncVisibility();
+
+        // Sync description
+        const syncDesc = syncBody.createDiv();
+        syncDesc.style.fontSize = "0.9em";
+        syncDesc.style.color = "var(--text-muted)";
+        syncDesc.style.marginBottom = "12px";
+        syncDesc.setText("Pull transcribed notes from FlowState to your vault.");
+
+        // Sync log area
+        const syncLogArea = syncBody.createEl("textarea");
+        syncLogArea.style.width = "100%";
+        syncLogArea.style.height = "120px";
+        syncLogArea.style.fontFamily = "monospace";
+        syncLogArea.style.fontSize = "0.85em";
+        syncLogArea.style.resize = "vertical";
+        syncLogArea.style.marginBottom = "8px";
+        syncLogArea.style.padding = "8px";
+        syncLogArea.style.border = "1px solid var(--background-modifier-border)";
+        syncLogArea.style.borderRadius = "4px";
+        syncLogArea.style.backgroundColor = "var(--background-secondary)";
+        syncLogArea.style.color = "var(--text-normal)";
+        syncLogArea.readOnly = true;
+        syncLogArea.placeholder = "Sync logs will appear here...";
+
+        // Sync buttons row
+        const syncButtonRow = new Setting(syncBody);
+        syncButtonRow.settingEl.style.borderTop = "none";
+        syncButtonRow.settingEl.style.padding = "0";
+
+        let isSyncing = false;
+        syncButtonRow.addButton((b) =>
+          b.setCta().setButtonText("Sync Now").onClick(async () => {
+            if (isSyncing) return;
+            isSyncing = true;
+            b.setButtonText("Syncing...");
+            b.setDisabled(true);
+
+            const timestamp = new Date().toLocaleTimeString();
+            syncLogArea.value += `[${timestamp}] Starting sync...\n`;
+            syncLogArea.scrollTop = syncLogArea.scrollHeight;
+
+            try {
+              const result = await this.plugin.syncWithLogs();
+              const endTime = new Date().toLocaleTimeString();
+
+              if (!result.success) {
+                syncLogArea.value += `[${endTime}] Error: ${result.error}\n`;
+              } else if (result.entries.length === 0) {
+                syncLogArea.value += `[${endTime}] No new files to sync (${result.jobsFound} job(s) found)\n`;
+              } else {
+                syncLogArea.value += `[${endTime}] Synced ${result.entries.length} file(s):\n`;
+                for (const entry of result.entries) {
+                  syncLogArea.value += `  → ${entry.path}\n`;
+                }
+              }
+              syncLogArea.value += "\n";
+            } catch (e: any) {
+              const endTime = new Date().toLocaleTimeString();
+              syncLogArea.value += `[${endTime}] Error: ${e?.message ?? e}\n\n`;
+            }
+
+            syncLogArea.scrollTop = syncLogArea.scrollHeight;
+            b.setButtonText("Sync Now");
+            b.setDisabled(false);
+            isSyncing = false;
+          })
+        );
+        syncButtonRow.addButton((b) =>
+          b.setButtonText("Copy Logs").onClick(async () => {
+            await navigator.clipboard.writeText(syncLogArea.value);
+            new Notice("Logs copied to clipboard");
+          })
+        );
+        syncButtonRow.addButton((b) =>
+          b.setButtonText("Clear").onClick(() => {
+            syncLogArea.value = "";
+          })
+        );
+
         // Credits section (collapsible, collapsed by default)
         const creditsDivider = containerEl.createDiv();
         creditsDivider.style.borderTop = "1px solid var(--background-modifier-border)";
@@ -444,6 +578,20 @@ export class FlowStateSettingTab extends PluginSettingTab {
             creditsBadge.setText(`(${total})`);
             creditsBadge.style.display = "";
 
+            // Explanation text with Manage Credits button
+            const creditsDescSetting = new Setting(creditsHost)
+              .setDesc("Each page or minute of audio that you upload uses one credit. You get 20 free credits each month. Need more? Upgrade your plan or buy top-ups.");
+            creditsDescSetting.settingEl.style.borderTop = "none";
+            creditsDescSetting.settingEl.style.paddingTop = "0";
+            creditsDescSetting.settingEl.style.marginTop = "0";
+            creditsDescSetting.addButton((b) =>
+              b.setCta()
+                .setButtonText("Manage Credits")
+                .onClick(() => {
+                  window.open("https://app.findflow.ai/credits", "_blank");
+                })
+            );
+
             const totalSetting = new Setting(creditsHost)
               .setName("Total Credits")
               .setDesc(String(total));
@@ -461,17 +609,6 @@ export class FlowStateSettingTab extends PluginSettingTab {
               .setDesc(`${credits.purchased_credits ?? 0} (never expire)`);
             topupSetting.settingEl.style.borderTop = "none";
             topupSetting.settingEl.style.padding = "6px 0";
-
-            const manageSetting = new Setting(creditsHost);
-            manageSetting.settingEl.style.borderTop = "none";
-            manageSetting.settingEl.style.padding = "6px 0";
-            manageSetting.addButton((b) =>
-              b.setCta()
-                .setButtonText("Manage Credits")
-                .onClick(() => {
-                  window.open("https://app.findflow.ai/credits", "_blank");
-                })
-            );
           }
         } catch (creditsErr) {
           // Bail out if a newer display() was called

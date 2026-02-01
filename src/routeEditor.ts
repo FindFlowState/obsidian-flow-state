@@ -148,7 +148,7 @@ export function renderRouteEditor(
   backBtnEl.addEventListener("click", () => onBack());
   const keyHandler = (e: KeyboardEvent) => { if (e.key === "Escape") { onBack(); } };
   window.addEventListener("keydown", keyHandler, { once: true });
-  const titleText = existing ? `Edit: ${existing.name}` : "Add Project";
+  const titleText = existing ? `Edit Project: ${existing.name}` : "Add Project";
   const title = headerRow.createEl("h2", { text: titleText });
   title.style.fontSize = "1.6em";
   title.style.margin = "0";

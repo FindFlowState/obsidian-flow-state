@@ -45,7 +45,7 @@ export async function exchangeCodeFromUrl(supabase: SupabaseClient, url: string)
 export async function exchangeFromObsidianParams(
   supabase: SupabaseClient,
   params: Record<string, string>,
-  redirectUri = "obsidian://flow-state-oauth"
+  redirectUri = "obsidian://flow-state"
 ) {
   // If hash contains access_token/refresh_token, set session directly (Magic Link)
   const hash = params["hash"] ?? "";
