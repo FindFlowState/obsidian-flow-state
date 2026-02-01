@@ -596,7 +596,7 @@ export class FlowStateSettingTab extends PluginSettingTab {
 
             // Explanation text with Manage Credits button
             const creditsDescSetting = new Setting(creditsHost)
-              .setDesc("Each page or minute of audio that you upload uses one credit. You get 20 free credits each month. Need more? Upgrade your plan or buy top-ups.");
+              .setDesc("Each page or minute of audio that you upload uses one credit. You get 50 free credits to get started. Need more? Upgrade your plan or buy top-ups.");
             creditsDescSetting.settingEl.style.borderTop = "none";
             creditsDescSetting.settingEl.style.paddingTop = "0";
             creditsDescSetting.settingEl.style.marginTop = "0";
