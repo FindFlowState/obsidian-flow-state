@@ -21,10 +21,17 @@ export default class FlowStatePlugin extends Plugin {
   // Cooldown for "not signed in" notice to prevent spam (ms)
   private static readonly NOT_SIGNED_IN_COOLDOWN_MS = 3000;
   private lastNotSignedInNotice = 0;
+  // Suppress focus-triggered sync briefly after deep link sync or plugin load (ms)
+  private static readonly FOCUS_SYNC_COOLDOWN_MS = 3000;
+  private lastSyncCooldownStart = 0;
 
   async onload() {
     // Initialize Sentry error tracking (prod builds only)
     initSentry();
+
+    // Set cooldown to prevent focus-triggered sync on startup
+    // This gives time for deep link handlers to run first
+    this.lastSyncCooldownStart = Date.now();
 
     await this.loadSettings();
 
@@ -49,7 +56,15 @@ export default class FlowStatePlugin extends Plugin {
 
     // Poll when app gains window focus (use DOM event for compatibility)
     // Use silent mode to avoid "not signed in" notice during OAuth flow
-    this.registerDomEvent(window, "focus", () => this.syncNow(true));
+    // Skip if recently started or deep link sync triggered (to avoid duplicate syncs)
+    this.registerDomEvent(window, "focus", () => {
+      const timeSinceCooldown = Date.now() - this.lastSyncCooldownStart;
+      if (timeSinceCooldown < FlowStatePlugin.FOCUS_SYNC_COOLDOWN_MS) {
+        log("focus sync skipped: within cooldown period", { timeSinceCooldown });
+        return;
+      }
+      this.syncNow(true);
+    });
 
     // Unified deep link handler: obsidian://flow-state
     // Supports:
@@ -87,26 +102,86 @@ export default class FlowStatePlugin extends Plugin {
         // ?cmd=sync&job=<id> - sync and open specific job's file
         // Note: Can't use "action" param - Obsidian sets it to the handler name
         if (params.cmd === "sync") {
+          // Set cooldown to suppress focus-triggered sync
+          this.lastSyncCooldownStart = Date.now();
           const targetJobId = params.job;
-          const result = await this.syncWithLogs();
+          log("deep-link sync: starting", { targetJobId, isSyncing: this.isSyncing });
 
+          // If another sync is in progress, wait for it to complete
+          if (this.isSyncing) {
+            log("deep-link sync: waiting for in-progress sync to complete");
+            let waitCount = 0;
+            while (this.isSyncing && waitCount < 30) {
+              await new Promise(resolve => setTimeout(resolve, 500));
+              waitCount++;
+            }
+            log("deep-link sync: done waiting", { waitCount, isSyncing: this.isSyncing });
+          }
+
+          // Now try our sync
+          const result = await this.syncWithLogs();
+          log("deep-link sync: result", {
+            success: result.success,
+            entriesCount: result.entries.length,
+            jobsFound: result.jobsFound,
+            error: result.error
+          });
+
+          // If we got entries, use those
           if (result.entries.length > 0) {
             let pathToOpen: string | null = null;
 
             if (targetJobId) {
-              // Find the specific job's file
               const entry = result.entries.find(e => e.jobId === targetJobId);
               if (entry) {
                 pathToOpen = entry.path;
               }
+              log("deep-link sync: target job lookup", { targetJobId, found: !!entry, pathToOpen });
             }
 
-            // Fall back to last synced file if target not found or not specified
             if (!pathToOpen) {
               pathToOpen = result.entries[result.entries.length - 1].path;
+              log("deep-link sync: using last entry", { pathToOpen });
             }
 
+            // Normalize path to handle legacy "//filename" paths
+            while (pathToOpen.startsWith("/")) {
+              pathToOpen = pathToOpen.slice(1);
+            }
+            log("deep-link sync: opening file", { pathToOpen });
             await this.app.workspace.openLinkText(pathToOpen, "", false);
+          } else if (targetJobId) {
+            // No entries from our sync - maybe another sync already delivered it
+            // Check the database for the delivered job's destination_url
+            log("deep-link sync: no entries, checking if job was already delivered");
+            try {
+              const supabase = getSupabase(this.settings);
+              const { data: job } = await supabase
+                .from("jobs")
+                .select("destination_url, status")
+                .eq("id", targetJobId)
+                .single();
+
+              if (job?.status === "delivered" && job?.destination_url) {
+                // Extract file path from obsidian://open?file=... URL
+                const match = job.destination_url.match(/file=([^&]+)/);
+                if (match) {
+                  // Normalize path to handle legacy "//filename" paths
+                  let filePath = decodeURIComponent(match[1]);
+                  while (filePath.startsWith("/")) {
+                    filePath = filePath.slice(1);
+                  }
+                  log("deep-link sync: opening already-delivered file", { filePath });
+                  await this.app.workspace.openLinkText(filePath, "", false);
+                }
+              } else {
+                log("deep-link sync: job not delivered or no destination_url", { job });
+              }
+            } catch (e) {
+              error("deep-link sync: failed to check job status", e);
+            }
+          } else {
+            log("deep-link sync: no entries to open");
           }
           return;
         }
@@ -462,7 +537,10 @@ export default class FlowStatePlugin extends Plugin {
       // Always use backend-provided final_title (fallback to original filename) for new files
       const baseName = it.final_title || (it.original_filename ? it.original_filename.replace(/\.[^/.]+$/, '') : 'Untitled');
       const relName = buildSafeNoteFilename(baseName, 120);
-      const relPath = `${destinationLocation}/${relName}`;
+      // Handle root destination "/" specially to avoid "//filename.md" paths
+      const relPath = destinationLocation === "/" || destinationLocation === ""
+        ? relName
+        : normalizePath(`${destinationLocation}/${relName}`);
 
       // Conflict handling for new files
       const finalPath = await this.resolveConflictPath(relPath);
