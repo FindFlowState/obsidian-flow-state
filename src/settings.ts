@@ -604,7 +604,7 @@ export class FlowStateSettingTab extends PluginSettingTab {
             // Explanation text with Manage Credits button
             const creditsDescSetting = new Setting(creditsHost)
               .setDesc(isUnlimited
-                ? "You have an Unlimited plan. Transcribe as much as you need!"
+                ? "You have an Unlimited plan. Upload as much as you want!"
                 : "Each page or minute of audio that you upload uses one credit. You get 50 free credits to get started. Need more? Upgrade your plan or buy top-ups.");
             creditsDescSetting.settingEl.style.borderTop = "none";
             creditsDescSetting.settingEl.style.paddingTop = "0";
