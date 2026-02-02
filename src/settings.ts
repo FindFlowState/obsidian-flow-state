@@ -589,14 +589,23 @@ export class FlowStateSettingTab extends PluginSettingTab {
           creditsHost.empty();
 
           if (credits) {
+            const isUnlimited = credits.subscription_plan === "unlimited";
             const total = (credits.subscription_credits ?? 0) + (credits.purchased_credits ?? 0);
-            // Update collapsed header badge with total
-            creditsBadge.setText(`(${total})`);
+
+            // Update collapsed header badge
+            if (isUnlimited) {
+              creditsBadge.setText("(Unlimited)");
+              creditsBadge.style.color = "var(--interactive-accent)";
+            } else {
+              creditsBadge.setText(`(${total})`);
+            }
             creditsBadge.style.display = "";
 
             // Explanation text with Manage Credits button
             const creditsDescSetting = new Setting(creditsHost)
-              .setDesc("Each page or minute of audio that you upload uses one credit. You get 50 free credits to get started. Need more? Upgrade your plan or buy top-ups.");
+              .setDesc(isUnlimited
+                ? "You have an Unlimited plan. Transcribe as much as you need!"
+                : "Each page or minute of audio that you upload uses one credit. You get 50 free credits to get started. Need more? Upgrade your plan or buy top-ups.");
             creditsDescSetting.settingEl.style.borderTop = "none";
             creditsDescSetting.settingEl.style.paddingTop = "0";
             creditsDescSetting.settingEl.style.marginTop = "0";
@@ -608,23 +617,25 @@ export class FlowStateSettingTab extends PluginSettingTab {
                 })
             );
 
-            const totalSetting = new Setting(creditsHost)
-              .setName("Total Credits")
-              .setDesc(String(total));
-            totalSetting.settingEl.style.borderTop = "none";
-            totalSetting.settingEl.style.padding = "6px 0";
+            if (!isUnlimited) {
+              const totalSetting = new Setting(creditsHost)
+                .setName("Total Credits")
+                .setDesc(String(total));
+              totalSetting.settingEl.style.borderTop = "none";
+              totalSetting.settingEl.style.padding = "6px 0";
 
-            const subscriptionSetting = new Setting(creditsHost)
-              .setName("Subscription Credits")
-              .setDesc(`${credits.subscription_credits ?? 0} (reset monthly)`);
-            subscriptionSetting.settingEl.style.borderTop = "none";
-            subscriptionSetting.settingEl.style.padding = "6px 0";
+              const subscriptionSetting = new Setting(creditsHost)
+                .setName("Subscription Credits")
+                .setDesc(`${credits.subscription_credits ?? 0} (reset monthly)`);
+              subscriptionSetting.settingEl.style.borderTop = "none";
+              subscriptionSetting.settingEl.style.padding = "6px 0";
 
-            const topupSetting = new Setting(creditsHost)
-              .setName("Top-up Credits")
-              .setDesc(`${credits.purchased_credits ?? 0} (never expire)`);
-            topupSetting.settingEl.style.borderTop = "none";
-            topupSetting.settingEl.style.padding = "6px 0";
+              const topupSetting = new Setting(creditsHost)
+                .setName("Top-up Credits")
+                .setDesc(`${credits.purchased_credits ?? 0} (never expire)`);
+              topupSetting.settingEl.style.borderTop = "none";
+              topupSetting.settingEl.style.padding = "6px 0";
+            }
           }
         } catch (creditsErr) {
           // Bail out if a newer display() was called
