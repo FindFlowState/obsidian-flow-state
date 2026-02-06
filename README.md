@@ -1,6 +1,6 @@
 # FlowState (Obsidian Plugin)
 
-[FlowState](https://findflow.ai) is the missing bridge between your offline notes and your digital brain. The app transcribes handwritten notes and voice memos using AI, and automatically syncs them to your Obsidian vault.
+[FlowState](https://seekflowstate.com) is the missing bridge between your offline notes and your digital brain. The app transcribes handwritten notes and voice memos using AI, and automatically syncs them to your Obsidian vault.
 
 ## Features
 
@@ -103,7 +103,7 @@ Projects control where and how notes are saved. You can create multiple projects
 
 There are several ways to send notes to FlowState:
 
-- **Mobile app:** Take a photo or record audio in the [FlowState mobile app](https://findflow.ai), then tap to upload
+- **Mobile app:** Take a photo or record audio in the [FlowState mobile app](https://seekflowstate.com), then tap to upload
 - **Email:** Send to your project's unique email address
   - Supports: 1 PDF, 1 audio file, or multiple PNG/JPG images (combined into one note)
   - Subject line is ignored—the AI generates a title from the content
@@ -144,7 +144,7 @@ Need more credits? Click **Manage Credits** to upgrade your plan or buy top-ups.
 
 ## Support
 
-- Website: [findflow.ai](https://findflow.ai)
+- Website: [seekflowstate.com](https://seekflowstate.com)
 - Issues: [GitHub Issues](https://github.com/FindFlowState/obsidian-flow-state/issues)
 
 ## Development

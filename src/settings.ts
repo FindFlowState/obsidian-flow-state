@@ -101,7 +101,7 @@ export class FlowStateSettingTab extends PluginSettingTab {
     // Intro text with Learn more link on same line
     const intro = containerEl.createEl("div");
     intro.appendText("Integrate handwritten notes and voice recordings into Obsidian. ");
-    const learnMoreLink = intro.createEl("a", { text: "Learn more →", href: "https://findflow.ai" });
+    const learnMoreLink = intro.createEl("a", { text: "Learn more →", href: "https://seekflowstate.com" });
     learnMoreLink.style.color = "var(--text-muted)";
     intro.style.fontSize = "0.9em";
     intro.style.marginBottom = "16px";
@@ -613,7 +613,7 @@ export class FlowStateSettingTab extends PluginSettingTab {
               b.setCta()
                 .setButtonText("Manage Credits")
                 .onClick(() => {
-                  window.open("https://app.findflow.ai/credits", "_blank");
+                  window.open("https://app.startflow.ing/credits", "_blank");
                 })
             );
 
