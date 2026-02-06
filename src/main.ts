@@ -127,6 +127,12 @@ export default class FlowStatePlugin extends Plugin {
             error: result.error
           });
 
+          // Show notice if not signed in
+          if (!result.success && result.error === "Not signed in") {
+            new Notice("FlowState: No account signed in. Please sign in from the plugin settings.");
+            return;
+          }
+
           // If we got entries, use those
           if (result.entries.length > 0) {
             let pathToOpen: string | null = null;
