@@ -40,7 +40,7 @@ describe('attachments', () => {
     expect(p).toBe('Inbox/Hello.md');
 
     // Check attachment file was written under Flow State/_attachments
-    const tf = (plugin as any).app.vault.getAbstractFileByPath('Flow State/_attachments/z.pdf');
+    const tf = (plugin as any).app.vault.getAbstractFileByPath('FlowState/_attachments/z.pdf');
     expect(tf).toBeTruthy();
   });
 });

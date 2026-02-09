@@ -22,7 +22,7 @@ vi.mock('../src/supabase', async () => {
         if (table === 'jobs') {
           return {
             select: () => ({
-              eq: () => ({ eq: () => ({ order: () => ({ limit: () => ({ data: jobs, error: null }) }) }) })
+              eq: () => ({ eq: () => ({ eq: () => ({ order: () => ({ limit: () => ({ data: jobs, error: null }) }) }) }) })
             }),
             update: (patch: any) => ({
               eq: () => ({ eq: () => { updates.push(patch); return { data: null, error: null }; } })
@@ -62,8 +62,8 @@ describe('syncOnce', () => {
 
   it('writes files and marks jobs as delivered', async () => {
     (plugin as any).settings.routes!['route1'] = baseRoute();
-    const count = await (plugin as any).syncOnce();
-    expect(count).toBe(1);
+    const paths = await (plugin as any).syncOnce();
+    expect(paths).toHaveLength(1);
     expect(updates).toContainEqual(expect.objectContaining({ status: 'delivered' }));
   });
 });

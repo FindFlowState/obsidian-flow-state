@@ -118,6 +118,16 @@ export default class FlowStatePlugin extends Plugin {
             log("deep-link sync: done waiting", { waitCount, isSyncing: this.isSyncing });
           }
 
+          // Check if signed in and show appropriate notice
+          const supabase = getSupabase(this.settings);
+          const { data: { session } } = await supabase.auth.getSession();
+          if (!session) {
+            new Notice("FlowState: No account signed in. Please sign in from the plugin settings.");
+            return;
+          }
+
+          new Notice("Flow State is syncing");
+
           // Now try our sync
           const result = await this.syncWithLogs();
           log("deep-link sync: result", {
@@ -126,12 +136,6 @@ export default class FlowStatePlugin extends Plugin {
             jobsFound: result.jobsFound,
             error: result.error
           });
-
-          // Show notice if not signed in
-          if (!result.success && result.error === "Not signed in") {
-            new Notice("FlowState: No account signed in. Please sign in from the plugin settings.");
-            return;
-          }
 
           // If we got entries, use those
           if (result.entries.length > 0) {
@@ -468,7 +472,9 @@ export default class FlowStatePlugin extends Plugin {
     const destinationLocation = normalizePath(route!.destination_location!.trim());
     const appendMode = !!(route as any).append_to_existing;
     const includeOriginal = (route as any).include_original_file as boolean | null | undefined;
-    log(`writeJobToVault: route fields dest="${destinationLocation}" appendMode=${appendMode} includeOriginal=${includeOriginal}`);
+    const destConfig = ((route as any).destination_config ?? {}) as Record<string, any>;
+    const embedOriginal = destConfig.embed_original !== false; // default true
+    log(`writeJobToVault: route fields dest="${destinationLocation}" appendMode=${appendMode} includeOriginal=${includeOriginal} embedOriginal=${embedOriginal}`);
 
     // Required fields must exist on the Route row (post-refresh)
     if (includeOriginal == null) throw new Error(`Route ${routeId} missing include_original_file`);
@@ -499,9 +505,10 @@ export default class FlowStatePlugin extends Plugin {
         const attachmentPath = await this.maybeDownloadOriginal(it, destFolder);
         if (attachmentPath) {
           const fileName = attachmentPath.split("/").pop();
-          // If image/audio and you prefer embed: `![[${fileName}]]`
-          attachmentSection = `\n\n![[${attachmentPath}]]\n\n`;
-          log(`writeJobToVault: embedded attachment ${fileName} at ${attachmentPath}`);
+          attachmentSection = embedOriginal
+            ? `\n\n![[${attachmentPath}]]\n\n`
+            : `\n\n[[${attachmentPath}|Original File]]\n\n`;
+          log(`writeJobToVault: ${embedOriginal ? "embedded" : "linked"} attachment ${fileName} at ${attachmentPath}`);
         }
       } catch (e) {
         warn("Attachment download failed, continuing without attachment:", e);

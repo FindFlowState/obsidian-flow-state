@@ -109,6 +109,8 @@ export function renderRouteEditor(
   let name = existing?.name ?? "";
   let destinationFolder = existing?.destination_location ?? "";
   let includeOriginalFile = existing?.include_original_file ?? true;
+  const destConfig = (existing?.destination_config ?? {}) as Record<string, any>;
+  let embedOriginal = destConfig.embed_original !== false; // default true
   let appendToExisting = existing?.append_to_existing ?? false;
   let customInstructions = existing?.custom_instructions ?? "";
   let aiTitleInstructions = existing?.ai_title_instructions ?? "";
@@ -259,10 +261,27 @@ export function renderRouteEditor(
   // Save Options (foldable)
   const saveOptsFold = addFoldableSection(containerEl, "Save Options");
 
+  // Embed Preview toggle (shown only when Download Original is on)
+  let embedToggleSetting: Setting | null = null;
+  const updateEmbedToggleVisibility = () => {
+    if (embedToggleSetting) {
+      (embedToggleSetting.settingEl as HTMLElement).style.display = includeOriginalFile ? "" : "none";
+    }
+  };
+
   new Setting(saveOptsFold.body)
     .setName("Download Original")
     .setDesc("Save the original handwriting or audio in your vault")
-    .addToggle((tg) => tg.setValue(includeOriginalFile).onChange((v) => includeOriginalFile = v));
+    .addToggle((tg) => tg.setValue(includeOriginalFile).onChange((v) => {
+      includeOriginalFile = v;
+      updateEmbedToggleVisibility();
+    }));
+
+  embedToggleSetting = new Setting(saveOptsFold.body)
+    .setName("Embed Preview")
+    .setDesc("Show an inline preview of the original file. When off, inserts a link instead.")
+    .addToggle((tg) => tg.setValue(embedOriginal).onChange((v) => embedOriginal = v));
+  updateEmbedToggleVisibility();
 
   // Title Instructions (dynamic name/desc based on append mode)
   const titleInstrSetting = new Setting(saveOptsFold.body)
@@ -270,7 +289,6 @@ export function renderRouteEditor(
       ta.setValue(aiTitleInstructions).onChange((v) => aiTitleInstructions = v);
       ta.inputEl.rows = 2;
       ta.inputEl.style.width = "100%";
-      ta.inputEl.maxLength = 100;
       ta.setPlaceholder("e.g., Keep it short and descriptive");
     });
   updateTitleInstrLabel = () => {
@@ -460,6 +478,7 @@ export function renderRouteEditor(
         destination_location: destinationFolder,
         append_to_existing: appendToExisting,
         include_original_file: includeOriginalFile,
+        destination_config: { ...destConfig, embed_original: embedOriginal },
         custom_instructions: customInstructions || null,
         use_ai_title: true, // Always use AI-generated titles
         ai_title_instructions: aiTitleInstructions || null,

@@ -141,4 +141,8 @@ export class Plugin {
 export const Platform = { isMobile: false };
 export class Notice { constructor(_: string) {} }
 
+export function normalizePath(path: string): string {
+  return path.replace(/\\/g, '/').replace(/\/+/g, '/').replace(/\/$/, '');
+}
+
 export type App = any;
