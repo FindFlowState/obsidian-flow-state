@@ -261,6 +261,25 @@ export function renderRouteEditor(
   // Save Options (foldable)
   const saveOptsFold = addFoldableSection(containerEl, "Save Options");
 
+  // Title Instructions (dynamic name/desc based on append mode)
+  const titleInstrSetting = new Setting(saveOptsFold.body)
+    .addTextArea((ta) => {
+      ta.setValue(aiTitleInstructions).onChange((v) => aiTitleInstructions = v);
+      ta.inputEl.rows = 2;
+      ta.inputEl.style.width = "100%";
+      ta.setPlaceholder("e.g., Keep it short and descriptive");
+    });
+  updateTitleInstrLabel = () => {
+    titleInstrSetting.setName(appendToExisting ? "Note Heading Instructions" : "File Name Instructions");
+    titleInstrSetting.setDesc(
+      appendToExisting
+        ? "Note headings are automatically generated. Provide optional instructions for how you want them named."
+        : "File names are automatically generated. Provide optional instructions for how you want them named."
+    );
+  };
+  updateTitleInstrLabel();
+  applyWideControl(titleInstrSetting);
+
   // Embed Preview toggle (shown only when Download Original is on)
   let embedToggleSetting: Setting | null = null;
   const updateEmbedToggleVisibility = () => {
@@ -282,25 +301,6 @@ export function renderRouteEditor(
     .setDesc("Show an inline preview of the original file. When off, inserts a link instead.")
     .addToggle((tg) => tg.setValue(embedOriginal).onChange((v) => embedOriginal = v));
   updateEmbedToggleVisibility();
-
-  // Title Instructions (dynamic name/desc based on append mode)
-  const titleInstrSetting = new Setting(saveOptsFold.body)
-    .addTextArea((ta) => {
-      ta.setValue(aiTitleInstructions).onChange((v) => aiTitleInstructions = v);
-      ta.inputEl.rows = 2;
-      ta.inputEl.style.width = "100%";
-      ta.setPlaceholder("e.g., Keep it short and descriptive");
-    });
-  updateTitleInstrLabel = () => {
-    titleInstrSetting.setName(appendToExisting ? "Note Heading Instructions" : "File Name Instructions");
-    titleInstrSetting.setDesc(
-      appendToExisting
-        ? "Note headings are automatically generated. Provide optional instructions for how you want them named."
-        : "File names are automatically generated. Provide optional instructions for how you want them named."
-    );
-  };
-  updateTitleInstrLabel();
-  applyWideControl(titleInstrSetting);
 
   // Enrichment Options (foldable)
   const aiFold = addFoldableSection(containerEl, "Enrichment Options");

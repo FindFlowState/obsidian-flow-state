@@ -626,7 +626,7 @@ export class FlowStateSettingTab extends PluginSettingTab {
 
               const subscriptionSetting = new Setting(creditsHost)
                 .setName("Subscription Credits")
-                .setDesc(`${credits.subscription_credits ?? 0} (reset monthly)`);
+                .setDesc(`${credits.subscription_credits ?? 0} (rolls over while subscribed)`);
               subscriptionSetting.settingEl.style.borderTop = "none";
               subscriptionSetting.settingEl.style.padding = "6px 0";
 
