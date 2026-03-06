@@ -322,7 +322,7 @@ export class FlowStateSettingTab extends PluginSettingTab {
           for (const r of routes) {
             const ui = new Setting(flowsListHost)
               .setName(r.name)
-              .setDesc(`Destination: ${r.destination_location}`);
+              .setDesc(r.destination_location ?? "");
             // Style project items with border and padding
             ui.settingEl.style.border = "1px solid var(--background-modifier-border)";
             ui.settingEl.style.borderRadius = "6px";

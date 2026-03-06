@@ -19,14 +19,27 @@
 - Obsidian v1.2.0 or newer
 - A FlowState account (free to create)
 
-### Step 1: Download the Plugin
+### Option A: Install via BRAT (Recommended)
+
+[BRAT](https://github.com/TfTHacker/obsidian42-brat) (Beta Reviewer's Auto-update Tool) is a community plugin that makes installing and updating beta plugins easy.
+
+1. Install **BRAT** from Settings → Community plugins → Browse → search "BRAT"
+2. Enable BRAT in your Community plugins list
+3. Open BRAT settings and click **Add Beta Plugin**
+4. Paste: `FindFlowState/obsidian-flow-state`
+5. Click **Add Plugin** — FlowState will be installed and enabled automatically
+6. Skip to [Step 4: Connect Your Account](#step-4-connect-your-account) below
+
+### Option B: Manual Install
+
+#### Step 1: Download the Plugin
 
 1. Go to the [latest release page](https://github.com/FindFlowState/obsidian-flow-state/releases/latest)
 2. Under **Assets**, download these two files:
    - `main.js`
    - `manifest.json`
 
-### Step 2: Install in Your Vault
+#### Step 2: Install in Your Vault
 
 1. Open your Obsidian vault folder in Finder (Mac) or File Explorer (Windows):
    - **Mac:** In Obsidian, right-click your vault name in the sidebar → "Reveal in Finder"
@@ -40,7 +53,7 @@
 - **Mac:** Press `Cmd + Shift + .` to show hidden files
 - **Windows:** In File Explorer, click View → Show → Hidden items
 
-### Step 3: Enable the Plugin
+#### Step 3: Enable the Plugin
 
 1. Open Obsidian
 2. Go to **Settings** (gear icon in the bottom-left)

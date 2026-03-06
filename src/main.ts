@@ -1,7 +1,7 @@
 import { Notice, Platform, Plugin, normalizePath } from "obsidian";
 import type { Job, Route } from "@flowstate/supabase-types";
 import { FlowStateSettingTab, PluginSettings, DEFAULT_SETTINGS } from "./settings";
-import { getSupabase, exchangeFromObsidianParams, fetchRouteById, ensureObsidianConnection } from "./supabase";
+import { getSupabase, exchangeFromObsidianParams, fetchRouteById, ensureObsidianConnection, updateRoute } from "./supabase";
 import { DEFAULT_SUPABASE_URL, DEFAULT_SUPABASE_ANON_KEY, BUILD_ENV } from "./config";
 import { ensureFolder, atomicWrite, writeBinaryToAttachments, sanitizePath, buildSafeNoteFilename } from "./fs";
 import { downloadFromStorage } from "./storage";
@@ -66,6 +66,34 @@ export default class FlowStatePlugin extends Plugin {
       this.syncNow(true);
     });
 
+    // Auto-update route destination paths when vault files/folders are moved
+    this.registerEvent(
+      this.app.vault.on('rename', async (file, oldPath) => {
+        const routes = this.settings.routes;
+        if (!routes) return;
+        const supabase = getSupabase(this.settings);
+        for (const [id, route] of Object.entries(routes)) {
+          const dest = route.destination_location?.trim();
+          if (!dest) continue;
+          let newDest: string | null = null;
+          if (dest === oldPath) {
+            newDest = file.path;
+          } else if (dest.startsWith(oldPath + "/")) {
+            newDest = file.path + dest.slice(oldPath.length);
+          }
+          if (newDest) {
+            route.destination_location = newDest;
+            try {
+              await updateRoute(supabase, id, { destination_location: newDest });
+            } catch (e) {
+              console.error(`Failed to update route ${id} path`, e);
+            }
+          }
+        }
+        await this.saveSettings();
+      })
+    );
+
     // Unified deep link handler: obsidian://flow-state
     // Supports:
     //   - OAuth callback (hash with tokens, or code param)
@@ -128,37 +156,64 @@ export default class FlowStatePlugin extends Plugin {
 
           new Notice("Flow State is syncing");
 
-          // Now try our sync
-          const result = await this.syncWithLogs();
-          log("deep-link sync: result", {
-            success: result.success,
-            entriesCount: result.entries.length,
-            jobsFound: result.jobsFound,
-            error: result.error
-          });
+          // Two-phase sync: if targetJobId, sync it first and open immediately,
+          // then sync remaining jobs in the background.
+          this.isSyncing = true;
 
-          // If we got entries, use those
-          if (result.entries.length > 0) {
-            let pathToOpen: string | null = null;
+          let priorityPath: string | null = null;
+          let allSyncedPaths: string[] = [];
 
+          try {
+            const items = await this.fetchPendingJobs();
+            log("deep-link sync: fetched jobs", { count: items.length, targetJobId });
+
+            // Phase 1: Sync target job first and open immediately
             if (targetJobId) {
-              const entry = result.entries.find(e => e.jobId === targetJobId);
-              if (entry) {
-                pathToOpen = entry.path;
+              const targetItem = items.find(it => it.id === targetJobId);
+              if (targetItem) {
+                priorityPath = await this.syncSingleJob(targetItem);
+                log("deep-link sync: priority job synced", { targetJobId, priorityPath });
+
+                // Open target file immediately — don't wait for remaining jobs
+                let pathToOpen = priorityPath;
+                while (pathToOpen.startsWith("/")) {
+                  pathToOpen = pathToOpen.slice(1);
+                }
+                log("deep-link sync: opening priority file", { pathToOpen });
+                await this.app.workspace.openLinkText(pathToOpen, "", false);
+                allSyncedPaths.push(priorityPath);
+              } else {
+                log("deep-link sync: target job not found in pending jobs", { targetJobId });
               }
-              log("deep-link sync: target job lookup", { targetJobId, found: !!entry, pathToOpen });
             }
 
-            if (!pathToOpen) {
-              pathToOpen = result.entries[result.entries.length - 1].path;
-              log("deep-link sync: using last entry", { pathToOpen });
+            // Phase 2: Sync remaining jobs silently
+            const remaining = targetJobId ? items.filter(it => it.id !== targetJobId) : items;
+            for (const it of remaining) {
+              const path = await this.syncSingleJob(it);
+              allSyncedPaths.push(path);
             }
+            log("deep-link sync: synced remaining jobs", { count: remaining.length });
 
-            // Normalize path to handle legacy "//filename" paths
+            this.setStatus(`delivered ${allSyncedPaths.length} item${allSyncedPaths.length === 1 ? "" : "s"}`);
+          } catch (e: any) {
+            error("deep-link sync error", e);
+            captureException(e, { context: "deepLinkSync" });
+            this.setStatus("Error");
+          } finally {
+            this.isSyncing = false;
+          }
+
+          // If priority file was already opened, we're done
+          if (priorityPath) {
+            // Already opened above
+          } else if (allSyncedPaths.length > 0) {
+            // No priority target — open last synced file
+            let pathToOpen = allSyncedPaths[allSyncedPaths.length - 1];
             while (pathToOpen.startsWith("/")) {
               pathToOpen = pathToOpen.slice(1);
             }
-            log("deep-link sync: opening file", { pathToOpen });
+            log("deep-link sync: opening last synced file", { pathToOpen });
             await this.app.workspace.openLinkText(pathToOpen, "", false);
           } else if (targetJobId) {
             // No entries from our sync - maybe another sync already delivered it
@@ -357,7 +412,8 @@ export default class FlowStatePlugin extends Plugin {
     }
   }
 
-  async syncOnce(): Promise<string[]> {
+  /** Fetch all pending (transcribed) jobs for active Obsidian routes */
+  async fetchPendingJobs(): Promise<Job[]> {
     const supabase = getSupabase(this.settings);
 
     // Single-query join to filter Obsidian routes (only active routes)
@@ -371,67 +427,51 @@ export default class FlowStatePlugin extends Plugin {
       .limit(10);
 
     if (jErr) throw jErr;
-    log(`syncOnce: fetched ${items?.length ?? 0} job(s)`);
+    log(`fetchPendingJobs: fetched ${items?.length ?? 0} job(s)`);
+    return items ?? [];
+  }
 
+  /** Write a single job to vault and ack it as delivered in the DB. Returns the written file path. */
+  async syncSingleJob(it: Job): Promise<string> {
+    log(`syncSingleJob: processing job ${it.id} route=${it.route_id}`);
+    const content = it.formatted_content || it.transcribed_text;
+    if (!content) throw new Error(`Missing formatted_content for job ${it.id}`);
+
+    const writtenPath = await this.writeJobToVault(it, content);
+    log(`syncSingleJob: wrote job ${it.id} to ${writtenPath}`);
+
+    // Ack update guarded by status
+    const destination_url = `obsidian://open?file=${encodeURIComponent(writtenPath)}`;
+    const supabase = getSupabase(this.settings);
+    const { error: uErr } = await supabase
+      .from("jobs")
+      .update({ status: "delivered", destination_url })
+      .eq("id", it.id)
+      .eq("status", "transcribed");
+    if (uErr) throw uErr;
+    log(`syncSingleJob: acked job ${it.id} as delivered -> ${destination_url}`);
+
+    return writtenPath;
+  }
+
+  async syncOnce(): Promise<string[]> {
+    const items = await this.fetchPendingJobs();
     const writtenPaths: string[] = [];
-    for (const it of items ?? []) {
-      log(`syncOnce: processing job ${it.id} route=${it.route_id}`);
-      const content = it.formatted_content || it.transcribed_text;
-      if (!content) throw new Error(`Missing formatted_content for job ${it.id}`);
-
-      const writtenPath = await this.writeJobToVault(it, content);
-      log(`syncOnce: wrote job ${it.id} to ${writtenPath}`);
-
-      // Ack update guarded by status
-      const destination_url = `obsidian://open?file=${encodeURIComponent(writtenPath)}`;
-      const { error: uErr } = await supabase
-        .from("jobs")
-        .update({ status: "delivered", destination_url })
-        .eq("id", it.id)
-        .eq("status", "transcribed");
-      if (uErr) throw uErr;
-      log(`syncOnce: acked job ${it.id} as delivered -> ${destination_url}`);
-
+    for (const it of items) {
+      const writtenPath = await this.syncSingleJob(it);
       writtenPaths.push(writtenPath);
     }
-
     return writtenPaths;
   }
 
   /** Sync with detailed entry info for logging */
   async syncOnceWithDetails(): Promise<{ entries: { timestamp: Date; path: string; title: string; jobId: string }[]; jobsFound: number }> {
-    const supabase = getSupabase(this.settings);
-
-    const { data: items, error: jErr } = await supabase
-      .from("jobs")
-      .select(`*, routes!inner(*, connections!inner(service_type))`)
-      .eq("status", "transcribed")
-      .eq("routes.is_active", true)
-      .eq("routes.connections.service_type", "obsidian")
-      .order("created_at", { ascending: true })
-      .limit(10);
-
-    if (jErr) throw jErr;
-    const jobsFound = items?.length ?? 0;
-    log(`syncOnceWithDetails: fetched ${jobsFound} job(s)`);
+    const items = await this.fetchPendingJobs();
+    const jobsFound = items.length;
 
     const entries: { timestamp: Date; path: string; title: string; jobId: string }[] = [];
-    for (const it of items ?? []) {
-      log(`syncOnceWithDetails: processing job ${it.id} route=${it.route_id}`);
-      const content = it.formatted_content || it.transcribed_text;
-      if (!content) throw new Error(`Missing formatted_content for job ${it.id}`);
-
-      const writtenPath = await this.writeJobToVault(it, content);
-      log(`syncOnceWithDetails: wrote job ${it.id} to ${writtenPath}`);
-
-      const destination_url = `obsidian://open?file=${encodeURIComponent(writtenPath)}`;
-      const { error: uErr } = await supabase
-        .from("jobs")
-        .update({ status: "delivered", destination_url })
-        .eq("id", it.id)
-        .eq("status", "transcribed");
-      if (uErr) throw uErr;
-
+    for (const it of items) {
+      const writtenPath = await this.syncSingleJob(it);
       entries.push({
         timestamp: new Date(),
         path: writtenPath,

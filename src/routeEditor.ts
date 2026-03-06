@@ -417,6 +417,8 @@ export function renderRouteEditor(
 
 
   saveBtn.onClick(async () => {
+    saveBtn.setDisabled(true);
+    saveBtn.setButtonText("Saving...");
     try {
       if (!name) throw new Error("Name is required");
       if (!destinationFolder) throw new Error("Destination is required");
@@ -492,6 +494,9 @@ export function renderRouteEditor(
     } catch (e: any) {
       console.error(e);
       new Notice(e?.message ?? String(e));
+    } finally {
+      saveBtn.setDisabled(false);
+      saveBtn.setButtonText("Save");
     }
   });
 }
