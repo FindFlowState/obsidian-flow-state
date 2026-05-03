@@ -122,8 +122,6 @@ export async function ensureObsidianConnection(
       user_id: uid,
       service_type: "obsidian",
       account_name: vaultName,
-      // access_token is now required by schema; use a local sentinel token for Obsidian
-      access_token: "local",
       metadata: { vault_name: vaultName, vault_base_path: basePath },
     })
     .select("id")
