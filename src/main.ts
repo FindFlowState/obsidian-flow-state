@@ -405,7 +405,7 @@ export default class FlowStatePlugin extends Plugin {
       error("Sync error", e);
       captureException(e, { context: "syncNow" });
       this.setStatus("Error");
-      new Notice(`FlowState sync error: ${e?.message ?? e}`);
+      if (!silent) new Notice(`FlowState sync error: ${e?.message ?? e}`);
       return [];
     } finally {
       this.isSyncing = false;
