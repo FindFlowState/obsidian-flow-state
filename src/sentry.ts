@@ -38,15 +38,30 @@ export function initSentry(): void {
       ],
       // Filter out non-plugin errors
       beforeSend(event) {
-        // Only send errors that originate from our plugin
-        const dominated = event.exception?.values?.some((ex) =>
-          ex.stacktrace?.frames?.some((frame) =>
-            frame.filename?.includes("flow-state") ||
-            frame.filename?.includes("main.js") ||
-            frame.module?.includes("flow-state")
-          )
+        const frames =
+          event.exception?.values?.flatMap(
+            (ex) => ex.stacktrace?.frames ?? []
+          ) ?? [];
+
+        // Drop errors where any frame comes from a different Obsidian plugin.
+        // Sentry's sentryWrapped wrapper (bundled in our main.js) appears in
+        // call stacks for other plugins' errors, so checking for main.js alone
+        // is not sufficient.
+        const fromOtherPlugin = frames.some(
+          (frame) =>
+            frame.filename?.startsWith("plugin:") &&
+            !frame.filename.includes("flow-state")
         );
-        return dominated ? event : null;
+        if (fromOtherPlugin) return null;
+
+        // Accept only if at least one frame is from our plugin
+        const fromOurPlugin = frames.some(
+          (frame) =>
+            frame.filename?.includes("flow-state") ||
+            frame.filename?.includes("~/main.js") ||
+            frame.module?.includes("flow-state")
+        );
+        return fromOurPlugin ? event : null;
       },
     });
     initialized = true;
