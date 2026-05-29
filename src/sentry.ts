@@ -74,7 +74,26 @@ export function initSentry(): void {
 
 export function captureException(error: unknown, context?: Record<string, unknown>): void {
   if (!initialized) return;
-  Sentry.captureException(error, { extra: context });
+
+  const msg =
+    error instanceof Error
+      ? error.message
+      : String((error as any)?.message ?? (error as any)?.details ?? error);
+
+  // Don't report expected offline/network errors
+  if (
+    msg.includes("Failed to fetch") ||
+    msg.includes("NetworkError") ||
+    msg.includes("fetch failed") ||
+    msg.includes("Load failed")
+  ) {
+    return;
+  }
+
+  // Supabase throws plain objects, not Error instances — wrap them so Sentry
+  // shows a meaningful title instead of "Object captured as exception with keys"
+  const err = error instanceof Error ? error : new Error(msg);
+  Sentry.captureException(err, { extra: context });
 }
 
 export function captureMessage(message: string, level: Sentry.SeverityLevel = "info"): void {
