@@ -101,18 +101,45 @@ export async function ensureObsidianConnection(
       .select("id, service_type, account_name, metadata, created_at")
       .eq("service_type", "obsidian")
       .eq("user_id", uid)
+      // Only consider live connections. A disconnected (is_active=false) connection
+      // still carries this vault's vault_base_path/account_name, so without this
+      // filter matchByPath/matchByVault would re-adopt a dead connection and skip
+      // claiming the active pending one the user just created in the app.
+      .eq("is_active", true)
       .order("created_at", { ascending: false });
     if (error) throw error;
     log("connection:list", { count: data?.length ?? 0 });
+    // A pending connection has only placeholder details (its account_name is the
+    // generic "Obsidian Vault" and it has no vault_base_path), so it must never be
+    // treated as an already-claimed match — otherwise it short-circuits the return
+    // below and is never claimed. Exclude pending rows from the match candidates so
+    // they always fall through to the claim branch.
+    const claimable = data?.filter((c: any) => c.metadata?.pending !== true) ?? [];
     // Prefer a strict match on vault base path when available; else fall back to vault name
     const matchByPath = basePath
-      ? data?.find((c: any) => (c.metadata?.vault_base_path ?? null) === basePath)
+      ? claimable.find((c: any) => (c.metadata?.vault_base_path ?? null) === basePath)
       : null;
-    const matchByVault = data?.find((c: any) => c.account_name === vaultName);
+    const matchByVault = claimable.find((c: any) => c.account_name === vaultName);
     const match = matchByPath?.id ?? matchByVault?.id ?? null;
     if (match) {
       log("connection:chosen", { connection_id: match, via: matchByPath ? "vault_base_path" : "vault_name" });
       return match as string;
+    }
+    // No vault match — adopt ("claim") a pending connection the user created in the
+    // app before installing the plugin. Pending connections carry metadata.pending
+    // and no vault details yet; claiming fills them in and clears the pending flag.
+    const pending = data?.find((c: any) => c.metadata?.pending === true);
+    if (pending) {
+      const { error: claimErr } = await supabase
+        .from("connections")
+        .update({
+          account_name: vaultName,
+          metadata: { vault_name: vaultName, vault_base_path: basePath },
+        })
+        .eq("id", pending.id);
+      if (claimErr) throw claimErr;
+      log("connection:claimed", { connection_id: pending.id });
+      return pending.id as string;
     }
   }
   // Create a new connection for this vault/device
