@@ -120,7 +120,7 @@ export default class FlowStatePlugin extends Plugin {
             this.settingsTab?.display();
           } catch (e: any) {
             error("OAuth exchange failed", e);
-            new Notice(`FlowState OAuth error: ${e?.message ?? e}`);
+            new Notice(`Flowstate OAuth error: ${e?.message ?? e}`);
           }
           return;
         }
@@ -150,7 +150,7 @@ export default class FlowStatePlugin extends Plugin {
           const supabase = getSupabase(this.settings);
           const { data: { session } } = await supabase.auth.getSession();
           if (!session) {
-            new Notice("FlowState: No account signed in. Please sign in from the plugin settings.");
+            new Notice("Flowstate: No account signed in. Please sign in from the plugin settings.");
             return;
           }
 
@@ -261,7 +261,7 @@ export default class FlowStatePlugin extends Plugin {
             this.settingsTab?.openNewProject();
           } catch (e: any) {
             error("Failed to open new project screen", e);
-            new Notice(`FlowState: ${e?.message ?? e}`);
+            new Notice(`Flowstate: ${e?.message ?? e}`);
           }
           return;
         }
@@ -287,7 +287,7 @@ export default class FlowStatePlugin extends Plugin {
           }
         } catch (e: any) {
           error("Failed to open settings", e);
-          new Notice(`FlowState: ${e?.message ?? e}`);
+          new Notice(`Flowstate: ${e?.message ?? e}`);
         }
       }
     );
@@ -301,7 +301,7 @@ export default class FlowStatePlugin extends Plugin {
   }
 
   setStatus(txt: string) {
-    if (this.statusEl) this.statusEl.setText(`FlowState: ${txt}`);
+    if (this.statusEl) this.statusEl.setText(`Flowstate: ${txt}`);
   }
 
   isMobile(): boolean {
@@ -382,7 +382,7 @@ export default class FlowStatePlugin extends Plugin {
       const hasUrl = !!(this.settings.supabaseUrl || DEFAULT_SUPABASE_URL);
       const hasKey = !!(this.settings.supabaseAnonKey || DEFAULT_SUPABASE_ANON_KEY);
       if (!hasUrl || !hasKey) {
-        if (!silent) new Notice("FlowState: configure Supabase in settings");
+        if (!silent) new Notice("Flowstate: configure Supabase in settings");
         return [];
       }
 
@@ -392,7 +392,7 @@ export default class FlowStatePlugin extends Plugin {
       if (!session) {
         // Only show notice for explicit (non-silent) syncs
         if (!silent) {
-          new Notice("FlowState: No account signed in");
+          new Notice("Flowstate: No account signed in");
         }
         return [];
       }
@@ -405,7 +405,7 @@ export default class FlowStatePlugin extends Plugin {
       error("Sync error", e);
       captureException(e, { context: "syncNow" });
       this.setStatus("Error");
-      if (!silent) new Notice(`FlowState sync error: ${e?.message ?? e}`);
+      if (!silent) new Notice(`Flowstate sync error: ${e?.message ?? e}`);
       return [];
     } finally {
       this.isSyncing = false;

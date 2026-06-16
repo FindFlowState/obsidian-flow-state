@@ -306,7 +306,7 @@ export function renderRouteEditor(
   const aiFold = addFoldableSection(containerEl, "Enrichment Options");
   const routeInstrSetting = new Setting(aiFold.body)
     .setName("Instructions")
-    .setDesc("Beyond transcription, FlowState's AI can translate, summarize, add context, extract action items, and more.")
+    .setDesc("Beyond transcription, Flowstate's AI can translate, summarize, add context, extract action items, and more.")
     .addTextArea((ta) => {
       ta.setValue(customInstructions).onChange((v) => customInstructions = v);
       ta.inputEl.rows = 4;

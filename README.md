@@ -1,6 +1,6 @@
-# FlowState (Obsidian Plugin)
+# Flowstate (Obsidian Plugin)
 
-[FlowState](https://seekflowstate.com) is the missing bridge between your offline notes and your digital brain. The app transcribes handwritten notes and voice memos using AI, and automatically syncs them to your Obsidian vault.
+[Flowstate](https://seekflowstate.com) is the missing bridge between your offline notes and your digital brain. The app transcribes handwritten notes and voice memos using AI, and automatically syncs them to your Obsidian vault.
 
 ## Features
 
@@ -17,7 +17,7 @@
 
 ### Requirements
 - Obsidian v1.2.0 or newer
-- A FlowState account (free to create)
+- A Flowstate account (free to create)
 
 ### Option A: Install via BRAT (Recommended)
 
@@ -26,15 +26,15 @@
 1. Install **BRAT** from Settings → Community plugins → Browse → search "BRAT"
 2. Enable BRAT in your Community plugins list
 3. Open BRAT settings and click **Add Beta Plugin**
-4. Paste: `FindFlowState/obsidian-flow-state`
-5. Click **Add Plugin** — FlowState will be installed and enabled automatically
+4. Paste: `FindFlowstate/obsidian-flow-state`
+5. Click **Add Plugin** — Flowstate will be installed and enabled automatically
 6. Skip to [Step 4: Connect Your Account](#step-4-connect-your-account) below
 
 ### Option B: Manual Install
 
 #### Step 1: Download the Plugin
 
-1. Go to the [latest release page](https://github.com/FindFlowState/obsidian-flow-state/releases/latest)
+1. Go to the [latest release page](https://github.com/FindFlowstate/obsidian-flow-state/releases/latest)
 2. Under **Assets**, download these two files:
    - `main.js`
    - `manifest.json`
@@ -59,15 +59,15 @@
 2. Go to **Settings** (gear icon in the bottom-left)
 3. Click **Community plugins** in the left sidebar
 4. If prompted, click "Turn on community plugins"
-5. Find **FlowState** in the list and toggle it **on**
+5. Find **Flowstate** in the list and toggle it **on**
 
 ### Step 4: Connect Your Account
 
-1. Still in Settings, click **FlowState** under Community plugins
+1. Still in Settings, click **Flowstate** under Community plugins
 2. Enter your email address and click **Connect**
 3. Check your email for a magic link and click it to sign in (check spam if needed)
 
-If you don't have a FlowState account, one will be created automatically.
+If you don't have a Flowstate account, one will be created automatically.
 
 ## Using the Plugin
 
@@ -75,7 +75,7 @@ If you don't have a FlowState account, one will be created automatically.
 
 Projects control where and how notes are saved. You can create multiple projects to handle different types of notes differently.
 
-1. Open **Settings → Community plugins → FlowState**
+1. Open **Settings → Community plugins → Flowstate**
 2. Click **Add Project**
 3. Configure your project settings (see below)
 4. Click **Save**
@@ -100,7 +100,7 @@ Projects control where and how notes are saved. You can create multiple projects
 
 #### Enrichment Options (expandable section)
 
-- **Instructions:** Tell FlowState's AI how to process your notes beyond basic transcription. Examples:
+- **Instructions:** Tell Flowstate's AI how to process your notes beyond basic transcription. Examples:
   - "Translate to Spanish"
   - "Summarize in bullet points"
   - "Extract action items and format as a checklist"
@@ -114,36 +114,36 @@ Projects control where and how notes are saved. You can create multiple projects
 
 ### Send a Note
 
-There are several ways to send notes to FlowState:
+There are several ways to send notes to Flowstate:
 
-- **Mobile app:** Take a photo or record audio in the [FlowState mobile app](https://seekflowstate.com), then tap to upload
+- **Mobile app:** Take a photo or record audio in the [Flowstate mobile app](https://seekflowstate.com), then tap to upload
 - **Email:** Send to your project's unique email address
   - Supports: 1 PDF, 1 audio file, or multiple PNG/JPG images (combined into one note)
   - Subject line is ignored—the AI generates a title from the content
 
 ### Sync Your Files
 
-FlowState automatically syncs completed transcriptions to your vault. Here's how it works:
+Flowstate automatically syncs completed transcriptions to your vault. Here's how it works:
 
 - **Automatic background sync:** The plugin checks for new files every 2 minutes (desktop) or 5 minutes (mobile)
-- **Manual sync:** Open Settings → FlowState → expand the **Sync** section → click **Sync Now**
-- **Command palette:** Press `Cmd/Ctrl + P` and search for "FlowState: Sync Now"
+- **Manual sync:** Open Settings → Flowstate → expand the **Sync** section → click **Sync Now**
+- **Command palette:** Press `Cmd/Ctrl + P` and search for "Flowstate: Sync Now"
 
-When you upload from the mobile app, FlowState can automatically open the synced note in Obsidian once it's ready.
+When you upload from the mobile app, Flowstate can automatically open the synced note in Obsidian once it's ready.
 
 ### Credits
 
 Each page or minute of audio uses one credit. You get 50 free credits to get started.
 
-To check your balance, open Settings → FlowState → expand the **Credits** section.
+To check your balance, open Settings → Flowstate → expand the **Credits** section.
 
 Need more credits? Click **Manage Credits** to upgrade your plan or buy top-ups.
 
 ## Privacy
 
 - No analytics or tracking are included in this plugin
-- Only your FlowState outputs (and optionally original files) are written to your vault
-- FlowState does not read or access any other files in your vault
+- Only your Flowstate outputs (and optionally original files) are written to your vault
+- Flowstate does not read or access any other files in your vault
 
 ## Troubleshooting
 
@@ -151,14 +151,14 @@ Need more credits? Click **Manage Credits** to upgrade your plan or buy top-ups.
 |-------|----------|
 | **Project email address not showing** | Email options only appear after a project is saved. Create the project first, then edit it to see email options. |
 | **Magic link not working** | Check your spam folder. Make sure you click the link on the same device where Obsidian is open. |
-| **Notes not syncing** | Open Settings → FlowState → Sync → click "Sync Now". Check the sync logs for errors. |
-| **"Not signed in" error** | Go to Settings → FlowState and reconnect your account. |
+| **Notes not syncing** | Open Settings → Flowstate → Sync → click "Sync Now". Check the sync logs for errors. |
+| **"Not signed in" error** | Go to Settings → Flowstate and reconnect your account. |
 | **Destination folder not found** | The plugin auto-creates folders, but make sure the path is valid. Edit your project and re-select the destination. |
 
 ## Support
 
 - Website: [seekflowstate.com](https://seekflowstate.com)
-- Issues: [GitHub Issues](https://github.com/FindFlowState/obsidian-flow-state/issues)
+- Issues: [GitHub Issues](https://github.com/FindFlowstate/obsidian-flow-state/issues)
 
 ## Development
 
