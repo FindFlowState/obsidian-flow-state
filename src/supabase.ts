@@ -114,6 +114,22 @@ export async function ensureObsidianConnection(
       log("connection:chosen", { connection_id: match, via: matchByPath ? "vault_base_path" : "vault_name" });
       return match as string;
     }
+    // No vault match — adopt ("claim") a pending connection the user created in the
+    // app before installing the plugin. Pending connections carry metadata.pending
+    // and no vault details yet; claiming fills them in and clears the pending flag.
+    const pending = data?.find((c: any) => c.metadata?.pending === true);
+    if (pending) {
+      const { error: claimErr } = await supabase
+        .from("connections")
+        .update({
+          account_name: vaultName,
+          metadata: { vault_name: vaultName, vault_base_path: basePath },
+        })
+        .eq("id", pending.id);
+      if (claimErr) throw claimErr;
+      log("connection:claimed", { connection_id: pending.id });
+      return pending.id as string;
+    }
   }
   // Create a new connection for this vault/device
   const { data: inserted, error: insertErr } = await supabase
