@@ -92,8 +92,8 @@ export class FlowStateSettingTab extends PluginSettingTab {
 
     containerEl.empty();
 
-    // FlowState title (plain text, styled like other plugins)
-    const titleEl = containerEl.createEl("div", { text: "FlowState" });
+    // Flowstate title (plain text, styled like other plugins)
+    const titleEl = containerEl.createEl("div", { text: "Flowstate" });
     titleEl.style.fontSize = "1.17em";
     titleEl.style.fontWeight = "600";
     titleEl.style.marginBottom = "8px";
@@ -109,8 +109,8 @@ export class FlowStateSettingTab extends PluginSettingTab {
     // How it works bullets (will be hidden when signed in)
     const bulletsSection = containerEl.createDiv({ cls: "fs-onboarding-bullets" });
     const bullets = [
-      "Upload your handwriting or voice note to the FlowState app. Take a photo, record audio, or send an email.",
-      "FlowState transcribes your note and enriches it with AI. For example, it can translate, summarize, or extract action items.",
+      "Upload your handwriting or voice note to the Flowstate app. Take a photo, record audio, or send an email.",
+      "Flowstate transcribes your note and enriches it with AI. For example, it can translate, summarize, or extract action items.",
       "Notes sync automatically to your vault. The original note is also saved as an attachment.",
     ];
     const bulletList = bulletsSection.createEl("ul");
@@ -194,7 +194,7 @@ export class FlowStateSettingTab extends PluginSettingTab {
             }
             if (isSignedIn) {
               // Confirm before logging out
-              const confirmLogout = window.confirm("Are you sure you want to log out of FlowState?");
+              const confirmLogout = window.confirm("Are you sure you want to log out of Flowstate?");
               if (!confirmLogout) return;
               await supaSignOut(supabase);
               // Clear cached routes and user id on logout so we don't show stale data
@@ -316,7 +316,7 @@ export class FlowStateSettingTab extends PluginSettingTab {
           flowsListHost.empty();
           if (routes.length === 0) {
             const empty = flowsListHost.createDiv({ cls: "setting-item-description" });
-            empty.setText("Create your first project. Projects tell FlowState where to save different types of notes.");
+            empty.setText("Create your first project. Projects tell Flowstate where to save different types of notes.");
             return;
           }
           for (const r of routes) {
@@ -466,7 +466,7 @@ export class FlowStateSettingTab extends PluginSettingTab {
         syncDesc.style.fontSize = "0.9em";
         syncDesc.style.color = "var(--text-muted)";
         syncDesc.style.marginBottom = "12px";
-        syncDesc.setText("Pull transcribed notes from FlowState to your vault.");
+        syncDesc.setText("Pull transcribed notes from Flowstate to your vault.");
 
         // Sync log area
         const syncLogArea = syncBody.createEl("textarea");
