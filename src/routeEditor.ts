@@ -150,7 +150,7 @@ export function renderRouteEditor(
   backBtnEl.addEventListener("click", () => onBack());
   const keyHandler = (e: KeyboardEvent) => { if (e.key === "Escape") { onBack(); } };
   window.addEventListener("keydown", keyHandler, { once: true });
-  const titleText = existing ? `Edit Project: ${existing.name}` : "Add Project";
+  const titleText = existing ? `Edit Flow: ${existing.name}` : "Add Flow";
   const title = headerRow.createEl("h2", { text: titleText });
   title.style.fontSize = "1.6em";
   title.style.margin = "0";
@@ -322,11 +322,11 @@ export function renderRouteEditor(
     const emailHelp = emailFold.body.createDiv();
     emailHelp.style.fontSize = "0.9em";
     emailHelp.style.color = "var(--text-muted)";
-    emailHelp.appendText("Send your files to a unique address to auto-create notes in this Project.");
+    emailHelp.appendText("Send your files to a unique address to auto-create notes in this Flow.");
 
     // Project Tag (editable)
     const slugSetting = new Setting(emailFold.body)
-      .setName("Project Tag")
+      .setName("Flow Tag")
       .setDesc("Lowercase letters, numbers, and dashes only.")
       .addText((t) => {
         t.setValue(slug)
@@ -344,8 +344,8 @@ export function renderRouteEditor(
 
     // Route Email (read-only with Copy button)
     const emailSetting = new Setting(emailFold.body)
-      .setName("Project Email")
-      .setDesc(emailDomain ? `Send a file to this project. Supported file types: 1 PDF, 1 audio file, or multiple PNG/JPG files (will be combined).` : `Email domain not configured.`)
+      .setName("Flow Email")
+      .setDesc(emailDomain ? `Send a file to this Flow. Supported file types: 1 PDF, 1 audio file, or multiple PNG/JPG files (will be combined).` : `Email domain not configured.`)
       .addText((t) => {
         t.setValue(computeEmail());
         t.setDisabled(true);
