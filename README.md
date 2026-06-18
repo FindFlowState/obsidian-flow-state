@@ -6,11 +6,11 @@
 
 - **AI-powered transcription:** Handwritten notes and audio recordings are transcribed using advanced AI, with automatic file naming based on content.
 - **Enrichment options:** Go beyond transcription—translate, summarize, add context, extract action items, turn circled words into hashtags, and more.
-- **Custom destinations:** Choose the exact folder in your vault where you want your notes saved. Create different projects for different purposes.
+- **Custom destinations:** Choose the exact folder in your vault where you want your notes saved. Create different flows for different purposes.
 - **Append mode:** Create new files for each note, or append to a single file with auto-generated headings.
 - **Download originals:** Optionally save the original handwriting images or audio files as embedded attachments.
-- **Multiple projects:** Create separate projects for different kinds of notes, each with its own AI instructions and save location.
-- **Email upload:** Get a unique email address for each project to send handwritten notes and voice memos for transcription.
+- **Multiple flows:** Create separate flows for different kinds of notes, each with its own AI instructions and save location.
+- **Email upload:** Get a unique email address for each flow to send handwritten notes and voice memos for transcription.
 - **Automatic sync:** Notes sync to your vault automatically in the background—no manual action required.
 
 ## Installation & Setup
@@ -19,16 +19,14 @@
 - Obsidian v1.2.0 or newer
 - A Flowstate account (free to create)
 
-### Option A: Install via BRAT (Recommended)
+### Option A: Install from Community Plugins (Recommended)
 
-[BRAT](https://github.com/TfTHacker/obsidian42-brat) (Beta Reviewer's Auto-update Tool) is a community plugin that makes installing and updating beta plugins easy.
+Flowstate is available in Obsidian's official community plugin store.
 
-1. Install **BRAT** from Settings → Community plugins → Browse → search "BRAT"
-2. Enable BRAT in your Community plugins list
-3. Open BRAT settings and click **Add Beta Plugin**
-4. Paste: `FindFlowstate/obsidian-flow-state`
-5. Click **Add Plugin** — Flowstate will be installed and enabled automatically
-6. Skip to [Step 4: Connect Your Account](#step-4-connect-your-account) below
+1. Open **Settings → Community plugins → Browse**
+2. Search for **Flowstate** (or open the [plugin page](https://obsidian.md/plugins?id=flow-state) directly)
+3. Click **Install**, then **Enable**
+4. Skip to [Step 4: Connect Your Account](#step-4-connect-your-account) below
 
 ### Option B: Manual Install
 
@@ -71,18 +69,18 @@ If you don't have a Flowstate account, one will be created automatically.
 
 ## Using the Plugin
 
-### Create a Project
+### Create a Flow
 
-Projects control where and how notes are saved. You can create multiple projects to handle different types of notes differently.
+Flows control where and how notes are saved. You can create multiple flows to handle different types of notes differently.
 
 1. Open **Settings → Community plugins → Flowstate**
-2. Click **Add Project**
-3. Configure your project settings (see below)
+2. Click **Add Flow**
+3. Configure your flow settings (see below)
 4. Click **Save**
 
 #### Basic Settings
 
-- **Name:** A descriptive name for your project (e.g., "Journal Entries", "Meeting Notes")
+- **Name:** A descriptive name for your flow (e.g., "Journal Entries", "Meeting Notes")
 - **Append to existing:**
   - **Off (default):** Each upload creates a new file in your destination folder
   - **On:** All uploads append to a single file, with AI-generated headings separating each entry
@@ -109,15 +107,15 @@ Projects control where and how notes are saved. You can create multiple projects
 
 #### Email Options (expandable section, available after saving)
 
-- **Project Tag:** A unique identifier used in your project's email address
-- **Project Email:** Send files to this address to auto-transcribe and save to this project
+- **Flow Tag:** A unique identifier used in your flow's email address
+- **Flow Email:** Send files to this address to auto-transcribe and save to this flow
 
 ### Send a Note
 
 There are several ways to send notes to Flowstate:
 
 - **Mobile app:** Take a photo or record audio in the [Flowstate mobile app](https://seekflowstate.com), then tap to upload
-- **Email:** Send to your project's unique email address
+- **Email:** Send to your flow's unique email address
   - Supports: 1 PDF, 1 audio file, or multiple PNG/JPG images (combined into one note)
   - Subject line is ignored—the AI generates a title from the content
 
@@ -125,7 +123,7 @@ There are several ways to send notes to Flowstate:
 
 Flowstate automatically syncs completed transcriptions to your vault. Here's how it works:
 
-- **Automatic background sync:** The plugin checks for new files every 2 minutes (desktop) or 5 minutes (mobile)
+- **Automatic background sync:** The plugin checks for new files every minute (desktop) or 5 minutes (mobile)
 - **Manual sync:** Open Settings → Flowstate → expand the **Sync** section → click **Sync Now**
 - **Command palette:** Press `Cmd/Ctrl + P` and search for "Flowstate: Sync Now"
 
@@ -141,7 +139,8 @@ Need more credits? Click **Manage Credits** to upgrade your plan or buy top-ups.
 
 ## Privacy
 
-- No analytics or tracking are included in this plugin
+- No usage analytics or behavioral tracking are included in this plugin
+- Production builds include crash reporting via [Sentry](https://sentry.io) to help us fix bugs. It captures only errors originating from this plugin, sends no personally identifiable information, and collects no performance or usage data
 - Only your Flowstate outputs (and optionally original files) are written to your vault
 - Flowstate does not read or access any other files in your vault
 
@@ -149,11 +148,11 @@ Need more credits? Click **Manage Credits** to upgrade your plan or buy top-ups.
 
 | Issue | Solution |
 |-------|----------|
-| **Project email address not showing** | Email options only appear after a project is saved. Create the project first, then edit it to see email options. |
+| **Flow email address not showing** | Email options only appear after a flow is saved. Create the flow first, then edit it to see email options. |
 | **Magic link not working** | Check your spam folder. Make sure you click the link on the same device where Obsidian is open. |
 | **Notes not syncing** | Open Settings → Flowstate → Sync → click "Sync Now". Check the sync logs for errors. |
 | **"Not signed in" error** | Go to Settings → Flowstate and reconnect your account. |
-| **Destination folder not found** | The plugin auto-creates folders, but make sure the path is valid. Edit your project and re-select the destination. |
+| **Destination folder not found** | The plugin auto-creates folders, but make sure the path is valid. Edit your flow and re-select the destination. |
 
 ## Support
 
