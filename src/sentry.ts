@@ -65,7 +65,6 @@ export function initSentry(): void {
       },
     });
     initialized = true;
-    console.log("[Flowstate] Sentry initialized");
   } catch (e) {
     // Silently fail - don't let Sentry initialization break the plugin
     console.warn("[Flowstate] Sentry initialization failed:", e);
@@ -75,10 +74,17 @@ export function initSentry(): void {
 export function captureException(error: unknown, context?: Record<string, unknown>): void {
   if (!initialized) return;
 
-  const msg =
-    error instanceof Error
-      ? error.message
-      : String((error as any)?.message ?? (error as any)?.details ?? error);
+  let msg: string;
+  if (error instanceof Error) {
+    msg = error.message;
+  } else if (typeof error === "object" && error !== null) {
+    const o = error as { message?: unknown; details?: unknown };
+    msg = typeof o.message === "string" ? o.message
+        : typeof o.details === "string" ? o.details
+        : "Unknown error";
+  } else {
+    msg = String(error);
+  }
 
   // Don't report expected offline/network errors
   if (

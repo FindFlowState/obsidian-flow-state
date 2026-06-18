@@ -23,12 +23,6 @@ jobs:
         with:
           node-version: 20
 
-      - name: Remove local-only dependency
-        # @flowstate/supabase-types is a monorepo-local types package.
-        # All imports are `import type` (erased by esbuild), so it is not
-        # needed at build time — only for IDE type-checking in the monorepo.
-        run: npm pkg delete dependencies.@flowstate/supabase-types
-
       - name: Install dependencies
         run: npm install
 
@@ -59,6 +53,7 @@ jobs:
         run: |
           test -f dist/prod/main.js || { echo "main.js not found"; exit 1; }
           test -f dist/prod/manifest.json || { echo "manifest.json not found"; exit 1; }
+          test -f dist/prod/styles.css || { echo "styles.css not found"; exit 1; }
 
       - name: Attest build artifacts
         uses: actions/attest-build-provenance@v2
@@ -66,6 +61,7 @@ jobs:
           subject-path: |
             dist/prod/main.js
             dist/prod/manifest.json
+            dist/prod/styles.css
 
       - name: Create release
         env:
@@ -75,5 +71,6 @@ jobs:
           gh release create "$tag" \
             dist/prod/main.js \
             dist/prod/manifest.json \
+            dist/prod/styles.css \
             --title "$tag" \
             --generate-notes

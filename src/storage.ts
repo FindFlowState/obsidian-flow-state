@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { Database } from "@flowstate/supabase-types";
+import type { Database } from "./types";
 
 export async function downloadFromStorage(
   supabase: SupabaseClient<Database>,

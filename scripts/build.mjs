@@ -117,6 +117,12 @@ build(common).then(() => {
     mkdirSync(outDir, { recursive: true });
     writeFileSync(manifestDst, pretty);
   }
+  // Copy styles.css next to main.js (Obsidian auto-loads it from the plugin folder)
+  const stylesSrc = resolve(projectRoot, 'styles.css');
+  if (existsSync(stylesSrc)) {
+    copyFileSync(stylesSrc, join(outDir, 'styles.css'));
+  }
+
   // Copy sourcemap if present
   const mapSrc = `${outfile}.map`;
   const mapDst = join(outDir, 'main.js.map');
