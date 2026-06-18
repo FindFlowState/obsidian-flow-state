@@ -4,8 +4,7 @@ const prefix = "[Flowstate]";
 const enableInfo = BUILD_ENV === "local"; // only log info in local dev
 
 export function log(...args: unknown[]) {
-  // eslint-disable-next-line obsidianmd/rule-custom-message -- centralized logger; dev-only output gated by enableInfo
-  if (enableInfo) console.log(prefix, ...args);
+  if (enableInfo) console.debug(prefix, ...args);
 }
 export function warn(...args: unknown[]) {
   console.warn(prefix, ...args);

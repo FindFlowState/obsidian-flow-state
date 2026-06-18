@@ -99,8 +99,9 @@ export async function writeBinaryToAttachments(
   }
 
   const bytes = data instanceof Uint8Array ? data : new Uint8Array(data);
-  const ab = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
-  await adapter.writeBinary(targetPath, ab as ArrayBuffer);
+  const ab = new ArrayBuffer(bytes.byteLength);
+  new Uint8Array(ab).set(bytes);
+  await adapter.writeBinary(targetPath, ab);
   return targetPath;
 }
 

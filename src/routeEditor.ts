@@ -15,8 +15,8 @@ class FolderInputSuggest extends AbstractInputSuggest<TFolder> {
   }
   getSuggestions(query: string): TFolder[] {
     const q = query.toLowerCase();
-    const all = this.app.vault.getAllLoadedFiles() as unknown[];
-    const items = (all.filter((f) => f instanceof TFolder))
+    const all = this.app.vault.getAllLoadedFiles();
+    const items = all.filter((f): f is TFolder => f instanceof TFolder)
       .map((f) => {
         const path = f.path.toLowerCase();
         const base = path.split("/").pop() || path;
@@ -60,8 +60,8 @@ class FileInputSuggest extends AbstractInputSuggest<TFile> {
   }
   getSuggestions(query: string): TFile[] {
     const q = query.toLowerCase();
-    const all = this.app.vault.getAllLoadedFiles() as unknown[];
-    const items = (all.filter((f) => f instanceof TFile))
+    const all = this.app.vault.getAllLoadedFiles();
+    const items = all.filter((f): f is TFile => f instanceof TFile)
       .map((f) => {
         const path = f.path.toLowerCase();
         const base = path.split("/").pop() || path;

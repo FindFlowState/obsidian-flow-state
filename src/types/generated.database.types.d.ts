@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-redundant-type-constituents, @typescript-eslint/no-explicit-any -- Supabase-generated types */
 export type Json =
   | string
   | number

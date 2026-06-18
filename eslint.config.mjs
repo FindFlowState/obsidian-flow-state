@@ -12,7 +12,6 @@ export default tseslint.config(
       "node_modules/**",
       "scripts/**",
       "test/**",
-      "src/types/**", // generated/vendored Supabase types
       "*.config.mjs",
     ],
   },
