@@ -1,4 +1,5 @@
 import { TFile, type App, normalizePath } from "obsidian";
+import { errorMessage } from "./logger";
 import sanitize from "sanitize-filename";
 
 export async function ensureFolder(app: App, folderPath: string) {
@@ -29,9 +30,10 @@ export async function atomicWrite(app: App, path: string, content: string) {
   }
   try {
     await app.vault.create(path, content);
-  } catch (e: any) {
+  } catch (e: unknown) {
     // Handle race condition where file was created between exists check and create
-    if (e?.message?.includes("already exists") || e?.message?.includes("File already exists")) {
+    const msg = errorMessage(e);
+    if (msg.includes("already exists") || msg.includes("File already exists")) {
       // File exists now, try to modify it instead
       const f = app.vault.getAbstractFileByPath(path);
       if (f instanceof TFile) {
@@ -53,7 +55,7 @@ export async function writeBinaryToAttachments(
   // If it's a relative setting like "./attachments" (same folder as note), resolve
   // it against the provided baseFolder (destination note's folder).
   // Fallback order: user setting -> baseFolder -> "FlowState/_attachments".
-  const userConfiguredFolder = (app.vault as any).getConfig?.("attachmentFolderPath") as string | undefined;
+  const userConfiguredFolder = (app.vault as { getConfig?: (key: string) => unknown }).getConfig?.("attachmentFolderPath") as string | undefined;
 
   let folder = "";
   const baseFolder = options?.baseFolder?.trim();
@@ -97,8 +99,9 @@ export async function writeBinaryToAttachments(
   }
 
   const bytes = data instanceof Uint8Array ? data : new Uint8Array(data);
-  const ab = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
-  await adapter.writeBinary(targetPath, ab as ArrayBuffer);
+  const ab = new ArrayBuffer(bytes.byteLength);
+  new Uint8Array(ab).set(bytes);
+  await adapter.writeBinary(targetPath, ab);
   return targetPath;
 }
 

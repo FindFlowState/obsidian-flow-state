@@ -1,9 +1,17 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-import type { Database, Route, RouteInsert, RouteUpdate } from "@flowstate/supabase-types";
+import type { Database, Route, RouteInsert, RouteUpdate } from "./types";
+import { FileSystemAdapter } from "obsidian";
 import type { App } from "obsidian";
 import type { PluginSettings } from "./settings";
 import { DEFAULT_SUPABASE_URL, DEFAULT_SUPABASE_ANON_KEY } from "./config";
-import { log, warn } from "./logger";
+import { log } from "./logger";
+
+// Shape of the connections.metadata JSON we read/write for Obsidian connections.
+type ConnectionMetadata = {
+  pending?: boolean;
+  vault_base_path?: string | null;
+  vault_name?: string;
+} | null;
 
 let client: SupabaseClient<Database> | null = null;
 
@@ -23,7 +31,7 @@ export function getSupabase(settings: PluginSettings): SupabaseClient<Database> 
 }
 
 export async function sendMagicLink(
-  supabase: SupabaseClient,
+  supabase: SupabaseClient<Database>,
   email: string,
   redirectTo: string
 ) {
@@ -35,7 +43,7 @@ export async function sendMagicLink(
   return data;
 }
 
-export async function exchangeCodeFromUrl(supabase: SupabaseClient, url: string) {
+export async function exchangeCodeFromUrl(supabase: SupabaseClient<Database>, url: string) {
   // For obsidian:// callback URLs
   const { error } = await supabase.auth.exchangeCodeForSession(url);
   if (error) throw error;
@@ -43,7 +51,7 @@ export async function exchangeCodeFromUrl(supabase: SupabaseClient, url: string)
 
 // Convenience: accept Obsidian protocol params and construct the callback URL for Supabase SDK
 export async function exchangeFromObsidianParams(
-  supabase: SupabaseClient,
+  supabase: SupabaseClient<Database>,
   params: Record<string, string>,
   redirectUri = "obsidian://flow-state"
 ) {
@@ -70,13 +78,13 @@ export async function exchangeFromObsidianParams(
 
 // removed dev password sign-in
 
-export async function getCurrentSession(supabase: SupabaseClient) {
+export async function getCurrentSession(supabase: SupabaseClient<Database>) {
   const { data, error } = await supabase.auth.getSession();
   if (error) throw error;
   return data.session ?? null;
 }
 
-export async function signOut(supabase: SupabaseClient) {
+export async function signOut(supabase: SupabaseClient<Database>) {
   const { error } = await supabase.auth.signOut();
   if (error) throw error;
 }
@@ -92,7 +100,7 @@ export async function ensureObsidianConnection(
   if (!uid) throw new Error("Not signed in");
   const vaultName = app.vault.getName?.() ?? "Obsidian Vault";
   // Desktop Obsidian exposes a FileSystemAdapter with getBasePath(); use it to distinguish devices/vaults
-  const basePath = (app.vault as any)?.adapter?.getBasePath?.() ?? null;
+  const basePath = app.vault.adapter instanceof FileSystemAdapter ? app.vault.adapter.getBasePath() : null;
   log("connection:ensure", { uid, vaultName, basePath });
   // Try to find an existing Obsidian connection; prefer one matching this vault name
   {
@@ -114,21 +122,21 @@ export async function ensureObsidianConnection(
     // treated as an already-claimed match — otherwise it short-circuits the return
     // below and is never claimed. Exclude pending rows from the match candidates so
     // they always fall through to the claim branch.
-    const claimable = data?.filter((c: any) => c.metadata?.pending !== true) ?? [];
+    const claimable = data?.filter((c) => (c.metadata as ConnectionMetadata)?.pending !== true) ?? [];
     // Prefer a strict match on vault base path when available; else fall back to vault name
     const matchByPath = basePath
-      ? claimable.find((c: any) => (c.metadata?.vault_base_path ?? null) === basePath)
+      ? claimable.find((c) => ((c.metadata as ConnectionMetadata)?.vault_base_path ?? null) === basePath)
       : null;
-    const matchByVault = claimable.find((c: any) => c.account_name === vaultName);
+    const matchByVault = claimable.find((c) => c.account_name === vaultName);
     const match = matchByPath?.id ?? matchByVault?.id ?? null;
     if (match) {
       log("connection:chosen", { connection_id: match, via: matchByPath ? "vault_base_path" : "vault_name" });
-      return match as string;
+      return match;
     }
     // No vault match — adopt ("claim") a pending connection the user created in the
     // app before installing the plugin. Pending connections carry metadata.pending
     // and no vault details yet; claiming fills them in and clears the pending flag.
-    const pending = data?.find((c: any) => c.metadata?.pending === true);
+    const pending = data?.find((c) => (c.metadata as ConnectionMetadata)?.pending === true);
     if (pending) {
       const { error: claimErr } = await supabase
         .from("connections")
@@ -139,7 +147,7 @@ export async function ensureObsidianConnection(
         .eq("id", pending.id);
       if (claimErr) throw claimErr;
       log("connection:claimed", { connection_id: pending.id });
-      return pending.id as string;
+      return pending.id;
     }
   }
   // Create a new connection for this vault/device
@@ -154,8 +162,8 @@ export async function ensureObsidianConnection(
     .select("id")
     .single();
   if (insertErr) throw insertErr;
-  log("connection:created", { connection_id: inserted!.id });
-  return inserted!.id as string;
+  log("connection:created", { connection_id: inserted.id });
+  return inserted.id;
 }
 
 export async function listObsidianRoutes(
@@ -175,7 +183,7 @@ export async function listObsidianRoutes(
     .order("id", { ascending: true });
   if (error) throw error;
   log("routes:list:result", { count: data?.length ?? 0 });
-  return (data as unknown) as Route[];
+  return data;
 }
 
 export async function fetchRouteById(
@@ -193,7 +201,7 @@ export async function fetchRouteById(
     .eq("user_id", uid)
     .single();
   if (error) throw error;
-  return data as unknown as Route;
+  return data;
 }
 
 export async function createProject(
@@ -203,7 +211,7 @@ export async function createProject(
     name: string;
     slug?: string;
     destination_location?: string | null;
-    destination_config?: any;
+    destination_config?: unknown;
     include_original_file?: boolean;
     append_to_existing?: boolean | null;
     custom_instructions?: string | null;
@@ -240,7 +248,7 @@ export async function createProject(
     .select()
     .single();
   if (error) throw error;
-  return data as unknown as Route;
+  return data;
 }
 
 export async function updateRoute(
@@ -265,7 +273,7 @@ export async function updateRoute(
     }
     throw error;
   }
-  return data as unknown as Route;
+  return data;
 }
 
 export async function deleteRoute(
@@ -302,5 +310,5 @@ export async function fetchUserCredits(
     .single();
 
   if (error) throw error;
-  return data as UserCredits;
+  return data;
 }

@@ -1,8 +1,8 @@
 {
   "id": "flow-state",
   "name": "Flowstate",
-  "version": "1.0.5",
-  "minAppVersion": "1.2.0",
+  "version": "1.0.6",
+  "minAppVersion": "1.4.10",
   "description": "Automatically transcribe handwritten notes and voice memos & store them in your vault.",
   "author": "iamjarins",
   "authorUrl": "https://seekflowstate.com",

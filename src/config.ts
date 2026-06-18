@@ -1,11 +1,11 @@
 // Values are injected at build time by scripts/build.mjs via esbuild define()
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
+ 
 declare const SUPABASE_URL: string;
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
+ 
 declare const SUPABASE_ANON_KEY: string;
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
+ 
 declare const INGEST_EMAIL_DOMAIN: string;
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
+ 
 declare const ENV: string;
 
 export const DEFAULT_SUPABASE_URL = (typeof SUPABASE_URL !== "undefined" ? SUPABASE_URL : "").trim();

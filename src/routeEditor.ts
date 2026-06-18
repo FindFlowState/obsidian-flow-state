@@ -1,9 +1,10 @@
 import { App, ButtonComponent, Notice, Setting, AbstractInputSuggest, TFolder, TFile, normalizePath } from "obsidian";
 import type FlowStatePlugin from "./main";
-import type { Route } from "@flowstate/supabase-types";
-import { getSupabase, createProject, updateRoute, deleteRoute } from "./supabase";
+import type { Route } from "./types";
+import { getSupabase, createProject, updateRoute } from "./supabase";
 import { DEFAULT_INGEST_EMAIL_DOMAIN } from "./config";
 import { ensureFolder, atomicWrite } from "./fs";
+import { errorMessage } from "./logger";
 
 // Inline folder typeahead using Obsidian's AbstractInputSuggest
 class FolderInputSuggest extends AbstractInputSuggest<TFolder> {
@@ -14,8 +15,8 @@ class FolderInputSuggest extends AbstractInputSuggest<TFolder> {
   }
   getSuggestions(query: string): TFolder[] {
     const q = query.toLowerCase();
-    const all = this.app.vault.getAllLoadedFiles() as any[];
-    const items = (all.filter((f) => f instanceof TFolder) as TFolder[])
+    const all = this.app.vault.getAllLoadedFiles();
+    const items = all.filter((f): f is TFolder => f instanceof TFolder)
       .map((f) => {
         const path = f.path.toLowerCase();
         const base = path.split("/").pop() || path;
@@ -46,7 +47,7 @@ class FolderInputSuggest extends AbstractInputSuggest<TFolder> {
     this.close();
     // Force dropdown to disappear in some Obsidian builds
     this.inputEl.blur();
-    setTimeout(() => this.inputEl.focus(), 0);
+    window.setTimeout(() => this.inputEl.focus(), 0);
   }
 }
 
@@ -59,8 +60,8 @@ class FileInputSuggest extends AbstractInputSuggest<TFile> {
   }
   getSuggestions(query: string): TFile[] {
     const q = query.toLowerCase();
-    const all = this.app.vault.getAllLoadedFiles() as any[];
-    const items = (all.filter((f) => f instanceof TFile) as TFile[])
+    const all = this.app.vault.getAllLoadedFiles();
+    const items = all.filter((f): f is TFile => f instanceof TFile)
       .map((f) => {
         const path = f.path.toLowerCase();
         const base = path.split("/").pop() || path;
@@ -85,7 +86,7 @@ class FileInputSuggest extends AbstractInputSuggest<TFile> {
     this.inputEl.dispatchEvent(new Event('input'));
     this.close();
     this.inputEl.blur();
-    setTimeout(() => this.inputEl.focus(), 0);
+    window.setTimeout(() => this.inputEl.focus(), 0);
   }
 }
 
@@ -100,21 +101,19 @@ export function renderRouteEditor(
   // Helper to widen input area in a Setting row
   const applyWideControl = (s: Setting) => {
     // Expand the control container
-    (s.controlEl as HTMLElement).style.flexGrow = "1";
-    (s.controlEl as HTMLElement).style.minWidth = "450px"; // wider left side
-    (s.controlEl as HTMLElement).style.maxWidth = "100%";
+    s.controlEl.addClass("fs-wide-control");
   };
 
   // Local state
   let name = existing?.name ?? "";
   let destinationFolder = existing?.destination_location ?? "";
   let includeOriginalFile = existing?.include_original_file ?? true;
-  const destConfig = (existing?.destination_config ?? {}) as Record<string, any>;
+  const destConfig = (existing?.destination_config ?? {}) as Record<string, unknown>;
   let embedOriginal = destConfig.embed_original !== false; // default true
   let appendToExisting = existing?.append_to_existing ?? false;
   let customInstructions = existing?.custom_instructions ?? "";
   let aiTitleInstructions = existing?.ai_title_instructions ?? "";
-  let slug = (existing as any)?.slug ?? "";
+  let slug = existing?.slug ?? "";
   let userHandle = "";
   // Remember last choices per mode so toggling append restores previous value
   let lastFilePathSelected: string | null = appendToExisting ? (destinationFolder || null) : null;
@@ -138,29 +137,21 @@ export function renderRouteEditor(
 
   // Back (Esc) + Title row
   const headerRow = containerEl.createDiv({ cls: "fs-editor-header" });
-  headerRow.style.display = "flex";
-  headerRow.style.alignItems = "center";
-  headerRow.style.gap = "12px";
-  headerRow.style.marginBottom = "16px";
   const backBtnEl = headerRow.createEl("button", { text: "←" });
-  backBtnEl.style.padding = "4px 10px";
-  backBtnEl.style.fontSize = "1em";
-  backBtnEl.style.lineHeight = "1";
-  backBtnEl.style.cursor = "pointer";
+  backBtnEl.addClass("fs-back-btn");
   backBtnEl.addEventListener("click", () => onBack());
   const keyHandler = (e: KeyboardEvent) => { if (e.key === "Escape") { onBack(); } };
   window.addEventListener("keydown", keyHandler, { once: true });
   const titleText = existing ? `Edit Flow: ${existing.name}` : "Add Flow";
   const title = headerRow.createEl("h2", { text: titleText });
-  title.style.fontSize = "1.6em";
-  title.style.margin = "0";
+  title.addClass("fs-editor-title");
 
   // Name
   const nameSetting = new Setting(containerEl)
     .setName("Name")
     .addText((t) => {
       t.setPlaceholder("Journal Entries").setValue(name).onChange((v) => name = v);
-      t.inputEl.style.width = "100%";
+      t.inputEl.addClass("fs-full-width");
     });
   applyWideControl(nameSetting);
 
@@ -174,7 +165,7 @@ export function renderRouteEditor(
     .setDesc("If on, destination should be a file. A heading will be added for each upload.")
     .addToggle((tg) => tg.setValue(appendToExisting).onChange((v) => {
       appendToExisting = v;
-      if (destinationSetting) destinationSetting.setName(appendToExisting ? "Destination File" : "Destination Folder");
+      destinationSetting.setName(appendToExisting ? "Destination File" : "Destination Folder");
       // Restore the last selection for that mode (or clear if none)
       destinationFolder = appendToExisting
         ? (lastFilePathSelected ?? "")
@@ -188,7 +179,7 @@ export function renderRouteEditor(
   // Destination (inline typeahead with dynamic mode)
   destinationSetting = new Setting(containerEl).setName(appendToExisting ? "Destination File" : "Destination Folder");
   let destinationInputEl: HTMLInputElement;
-  let destinationSuggest: AbstractInputSuggest<any> | null = null;
+  let destinationSuggest: AbstractInputSuggest<unknown> | null = null;
   const setupDestinationSuggest = () => {
     if (!destinationInputEl) return;
     if (destinationSuggest) { destinationSuggest.close(); destinationSuggest = null; }
@@ -199,7 +190,7 @@ export function renderRouteEditor(
           destinationInputEl.value = destinationFolder;
           lastFilePathSelected = destinationFolder;
           // Rebuild to fully teardown suggester so popup cannot linger
-          setTimeout(() => {
+          window.setTimeout(() => {
             rebuildDestinationControl();
           }, 0);
         })
@@ -207,7 +198,7 @@ export function renderRouteEditor(
           destinationFolder = folder.path;
           destinationInputEl.value = destinationFolder;
           lastFolderPathSelected = destinationFolder;
-          setTimeout(() => {
+          window.setTimeout(() => {
             rebuildDestinationControl();
           }, 0);
         });
@@ -217,7 +208,6 @@ export function renderRouteEditor(
     destinationSetting.controlEl.empty();
     const input = destinationSetting.controlEl.createEl("input", { type: "text" });
     input.addClass("fs-destination-input");
-    input.style.width = "100%";
     input.value = destinationFolder;
     input.placeholder = appendToExisting ? "Type to search files…" : "Type to search folders…";
     input.addEventListener("input", (e) => {
@@ -226,7 +216,7 @@ export function renderRouteEditor(
       if (appendToExisting) lastFilePathSelected = destinationFolder;
       else lastFolderPathSelected = destinationFolder;
     });
-    destinationInputEl = input as HTMLInputElement;
+    destinationInputEl = input;
     setupDestinationSuggest();
   };
   // Initial build
@@ -236,21 +226,13 @@ export function renderRouteEditor(
   // Foldable sections helper (default closed) with arrow indicator and extra spacing
   const addFoldableSection = (parent: HTMLElement, heading: string) => {
     const section = parent.createDiv({ cls: "fs-foldable-section" });
-    (section as HTMLDivElement).style.marginTop = "18px"; // extra vertical spacing
     const header = section.createEl("div", { cls: "fs-section-header" });
-    header.style.display = "flex";
-    header.style.alignItems = "center";
-    header.style.gap = "6px";
-    header.style.fontSize = "1.2em";
-    header.style.fontWeight = "600";
-    header.style.cursor = "pointer";
     const arrow = header.createEl("span", { text: "▸" });
-    const label = header.createEl("span", { text: heading });
+    header.createEl("span", { text: heading });
     const body = section.createDiv({ cls: "fs-section-body" });
-    body.style.marginTop = "10px";
     let open = false;
     const update = () => {
-      body.style.display = open ? "" : "none";
+      body.toggleClass("fs-hidden", !open);
       arrow.textContent = open ? "▾" : "▸";
     };
     header.addEventListener("click", () => { open = !open; update(); });
@@ -266,7 +248,7 @@ export function renderRouteEditor(
     .addTextArea((ta) => {
       ta.setValue(aiTitleInstructions).onChange((v) => aiTitleInstructions = v);
       ta.inputEl.rows = 2;
-      ta.inputEl.style.width = "100%";
+      ta.inputEl.addClass("fs-full-width");
       ta.setPlaceholder("e.g., Keep it short and descriptive");
     });
   updateTitleInstrLabel = () => {
@@ -284,7 +266,7 @@ export function renderRouteEditor(
   let embedToggleSetting: Setting | null = null;
   const updateEmbedToggleVisibility = () => {
     if (embedToggleSetting) {
-      (embedToggleSetting.settingEl as HTMLElement).style.display = includeOriginalFile ? "" : "none";
+      embedToggleSetting.settingEl.toggleClass("fs-hidden", !includeOriginalFile);
     }
   };
 
@@ -310,7 +292,7 @@ export function renderRouteEditor(
     .addTextArea((ta) => {
       ta.setValue(customInstructions).onChange((v) => customInstructions = v);
       ta.inputEl.rows = 4;
-      ta.inputEl.style.width = "100%";
+      ta.inputEl.addClass("fs-full-width");
       ta.setPlaceholder('e.g., "Translate to Spanish", "Add context and book suggestions", or "Turn circled words into hashtags"');
     });
   applyWideControl(routeInstrSetting);
@@ -319,9 +301,7 @@ export function renderRouteEditor(
   if (existing) {
     const emailFold = addFoldableSection(containerEl, "Email Options");
     // helper text
-    const emailHelp = emailFold.body.createDiv();
-    emailHelp.style.fontSize = "0.9em";
-    emailHelp.style.color = "var(--text-muted)";
+    const emailHelp = emailFold.body.createDiv({ cls: "fs-email-help" });
     emailHelp.appendText("Send your files to a unique address to auto-create notes in this Flow.");
 
     // Project Tag (editable)
@@ -335,10 +315,10 @@ export function renderRouteEditor(
             t.setValue(slug); // normalize input
             // live update email field
             const emailVal = computeEmail();
-            const input = emailSetting.controlEl.querySelector("input") as HTMLInputElement | null;
+            const input = emailSetting.controlEl.querySelector("input");
             if (input) input.value = emailVal;
           });
-        t.inputEl.style.width = "100%";
+        t.inputEl.addClass("fs-full-width");
       });
     applyWideControl(slugSetting);
 
@@ -349,18 +329,15 @@ export function renderRouteEditor(
       .addText((t) => {
         t.setValue(computeEmail());
         t.setDisabled(true);
-        t.inputEl.style.width = "100%";
+        t.inputEl.addClass("fs-full-width");
       });
     // Error message element for email copy
-    const emailErrorEl = emailFold.body.createDiv();
-    emailErrorEl.style.fontSize = "0.85em";
-    emailErrorEl.style.color = "var(--text-error)";
-    emailErrorEl.style.marginTop = "4px";
-    emailErrorEl.style.display = "none";
+    const emailErrorEl = emailFold.body.createDiv({ cls: "fs-inline-error" });
+    emailErrorEl.addClass("fs-hidden");
     emailSetting.addButton((b) =>
       b.setButtonText("Copy").onClick(async () => {
         // Clear previous error
-        emailErrorEl.style.display = "none";
+        emailErrorEl.addClass("fs-hidden");
         emailErrorEl.textContent = "";
         try {
           // Save slug to backend first
@@ -369,17 +346,17 @@ export function renderRouteEditor(
           // Only copy if save succeeded
           await navigator.clipboard.writeText(computeEmail());
           new Notice("Email copied");
-        } catch (e: any) {
-          const errMsg = e?.message ?? String(e);
+        } catch (e: unknown) {
+          const errMsg = errorMessage(e);
           emailErrorEl.textContent = errMsg;
-          emailErrorEl.style.display = "block";
+          emailErrorEl.removeClass("fs-hidden");
         }
       })
     );
     applyWideControl(emailSetting);
 
     // Fetch user handle asynchronously and update the email preview
-    (async () => {
+    void (async () => {
       try {
         const supabase = getSupabase(plugin.settings);
         const { data, error } = await supabase.auth.getUser();
@@ -392,13 +369,13 @@ export function renderRouteEditor(
           .eq("id", uid)
           .single();
         if (uErr) return;
-        const nextHandle = (userRow as any)?.handle ? String((userRow as any).handle) : "";
+        const nextHandle = userRow?.handle ? String(userRow.handle) : "";
         if (nextHandle) {
           userHandle = normalizeHandle(nextHandle);
-          const input = emailSetting.controlEl.querySelector("input") as HTMLInputElement | null;
+          const input = emailSetting.controlEl.querySelector("input");
           if (input) input.value = computeEmail();
         }
-      } catch (e) {
+      } catch {
         // leave empty; user may not be signed in yet
       }
     })();
@@ -408,9 +385,8 @@ export function renderRouteEditor(
   const actions = containerEl.createDiv({ cls: "modal-button-container" });
   const spacer = actions.createDiv();
   const rightGroup = actions.createDiv();
-  spacer.style.flex = "1"; // push actions to the right
-  rightGroup.style.display = "flex";
-  rightGroup.style.gap = "8px";
+  spacer.addClass("fs-spacer");
+  rightGroup.addClass("fs-button-group");
 
   const saveBtn = new ButtonComponent(rightGroup).setButtonText("Save");
   new ButtonComponent(rightGroup).setButtonText("Cancel").onClick(() => onBack());
@@ -440,14 +416,14 @@ export function renderRouteEditor(
           // Auto-create destination file if it does not exist (with robust retry)
           const parent = normalizedDest.split("/").slice(0, -1).join("/");
           if (parent) {
-            try { await ensureFolder(app, parent); } catch {}
+            try { await ensureFolder(app, parent); } catch { /* best-effort; retried below */ }
           }
           try {
             await atomicWrite(app, normalizedDest, "");
-          } catch (e) {
+          } catch {
             // Retry once after ensuring folders again
             if (parent) {
-              try { await ensureFolder(app, parent); } catch {}
+              try { await ensureFolder(app, parent); } catch { /* best-effort; retried below */ }
             }
             await atomicWrite(app, normalizedDest, "");
           }
@@ -457,7 +433,7 @@ export function renderRouteEditor(
           }
           // Persist normalization back to UI state
           destinationFolder = normalizedDest;
-          const input = destinationSetting.controlEl.querySelector("input") as HTMLInputElement | null;
+          const input = destinationSetting.controlEl.querySelector("input");
           if (input) input.value = destinationFolder;
         }
       } else {
@@ -491,9 +467,9 @@ export function renderRouteEditor(
         : await createProject(supabase, app, projectData);
       await onSaved(row);
       onBack();
-    } catch (e: any) {
+    } catch (e: unknown) {
       console.error(e);
-      new Notice(e?.message ?? String(e));
+      new Notice(errorMessage(e));
     } finally {
       saveBtn.setDisabled(false);
       saveBtn.setButtonText("Save");

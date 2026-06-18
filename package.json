@@ -10,21 +10,26 @@
     "build": "node scripts/build.mjs --mode=local && node scripts/build.mjs --mode=prod",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "lint": "eslint src",
+    "lint:fix": "eslint src --fix"
   },
   "devDependencies": {
+    "@eslint/js": "^9.39.4",
     "@sentry/cli": "^3.1.0",
     "@types/mustache": "^4.2.6",
     "@types/node": "^20.12.7",
     "esbuild": "^0.21.5",
+    "eslint": "^9.39.4",
+    "eslint-plugin-obsidianmd": "^0.3.0",
     "obsidian": "^1.5.8",
     "typescript": "^5.4.5",
+    "typescript-eslint": "^8.61.1",
     "vitest": "^1.6.0"
   },
   "dependencies": {
-    "@flowstate/supabase-types": "file:../../packages/supabase-types",
     "@sentry/browser": "^10.37.0",
-    "@supabase/supabase-js": "^2.45.0",
+    "@supabase/supabase-js": "^2.108.2",
     "mustache": "^4.2.0",
     "sanitize-filename": "^1.6.3"
   }

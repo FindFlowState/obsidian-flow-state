@@ -1,12 +1,15 @@
-import { Notice, Platform, Plugin, normalizePath } from "obsidian";
-import type { Job, Route } from "@flowstate/supabase-types";
+import { Notice, Platform, Plugin, normalizePath, requestUrl, TFile } from "obsidian";
+import type { Job, Route } from "./types";
 import { FlowStateSettingTab, PluginSettings, DEFAULT_SETTINGS } from "./settings";
 import { getSupabase, exchangeFromObsidianParams, fetchRouteById, ensureObsidianConnection, updateRoute } from "./supabase";
-import { DEFAULT_SUPABASE_URL, DEFAULT_SUPABASE_ANON_KEY, BUILD_ENV } from "./config";
-import { ensureFolder, atomicWrite, writeBinaryToAttachments, sanitizePath, buildSafeNoteFilename } from "./fs";
+import { DEFAULT_SUPABASE_URL, DEFAULT_SUPABASE_ANON_KEY } from "./config";
+import { ensureFolder, atomicWrite, writeBinaryToAttachments, buildSafeNoteFilename } from "./fs";
 import { downloadFromStorage } from "./storage";
-import { log, warn, error } from "./logger";
+import { log, warn, error, errorMessage } from "./logger";
 import { initSentry, captureException } from "./sentry";
+
+// Minimal shape of Obsidian's undocumented settings API used for deep links.
+type ObsidianSettingApi = { open(): Promise<void>; openTabById(id: string): void };
 
 export default class FlowStatePlugin extends Plugin {
   settings: PluginSettings = DEFAULT_SETTINGS;
@@ -43,7 +46,7 @@ export default class FlowStatePlugin extends Plugin {
 
     // Commands
     this.addCommand({
-      id: "flow-state-sync-now",
+      id: "sync-now",
       name: "Sync Now",
       callback: () => this.syncNow(),
     });
@@ -63,7 +66,7 @@ export default class FlowStatePlugin extends Plugin {
         log("focus sync skipped: within cooldown period", { timeSinceCooldown });
         return;
       }
-      this.syncNow(true);
+      void this.syncNow(true);
     });
 
     // Auto-update route destination paths when vault files/folders are moved
@@ -118,9 +121,9 @@ export default class FlowStatePlugin extends Plugin {
             await exchangeFromObsidianParams(supabase, params, "obsidian://flow-state");
             await ensureObsidianConnection(supabase, this.app);
             this.settingsTab?.display();
-          } catch (e: any) {
+          } catch (e: unknown) {
             error("OAuth exchange failed", e);
-            new Notice(`Flowstate OAuth error: ${e?.message ?? e}`);
+            new Notice(`Flowstate OAuth error: ${errorMessage(e)}`);
           }
           return;
         }
@@ -140,7 +143,7 @@ export default class FlowStatePlugin extends Plugin {
             log("deep-link sync: waiting for in-progress sync to complete");
             let waitCount = 0;
             while (this.isSyncing && waitCount < 30) {
-              await new Promise(resolve => setTimeout(resolve, 500));
+              await new Promise(resolve => window.setTimeout(resolve, 500));
               waitCount++;
             }
             log("deep-link sync: done waiting", { waitCount, isSyncing: this.isSyncing });
@@ -196,7 +199,7 @@ export default class FlowStatePlugin extends Plugin {
             log("deep-link sync: synced remaining jobs", { count: remaining.length });
 
             this.setStatus(`delivered ${allSyncedPaths.length} item${allSyncedPaths.length === 1 ? "" : "s"}`);
-          } catch (e: any) {
+          } catch (e: unknown) {
             error("deep-link sync error", e);
             captureException(e, { context: "deepLinkSync" });
             this.setStatus("Error");
@@ -255,13 +258,13 @@ export default class FlowStatePlugin extends Plugin {
         // Note: Can't use "action" param - Obsidian sets it to the handler name
         if (params.cmd === "new-project") {
           try {
-            const setting = (this.app as any).setting;
+            const setting = (this.app as unknown as { setting: ObsidianSettingApi }).setting;
             await setting.open();
             setting.openTabById(this.manifest.id);
             this.settingsTab?.openNewProject();
-          } catch (e: any) {
+          } catch (e: unknown) {
             error("Failed to open new project screen", e);
-            new Notice(`Flowstate: ${e?.message ?? e}`);
+            new Notice(`Flowstate: ${errorMessage(e)}`);
           }
           return;
         }
@@ -270,7 +273,7 @@ export default class FlowStatePlugin extends Plugin {
         try {
           const projectId = params.project;
 
-          const setting = (this.app as any).setting;
+          const setting = (this.app as unknown as { setting: ObsidianSettingApi }).setting;
           await setting.open();
           setting.openTabById(this.manifest.id);
 
@@ -285,9 +288,9 @@ export default class FlowStatePlugin extends Plugin {
               new Notice("Flow not found");
             }
           }
-        } catch (e: any) {
+        } catch (e: unknown) {
           error("Failed to open settings", e);
-          new Notice(`Flowstate: ${e?.message ?? e}`);
+          new Notice(`Flowstate: ${errorMessage(e)}`);
         }
       }
     );
@@ -322,7 +325,7 @@ export default class FlowStatePlugin extends Plugin {
   }
 
   async loadSettings() {
-    const data = await this.loadData();
+    const data = (await this.loadData()) as Partial<PluginSettings> | null;
     this.settings = Object.assign({}, DEFAULT_SETTINGS, data ?? {});
   }
 
@@ -359,11 +362,11 @@ export default class FlowStatePlugin extends Plugin {
       const { entries, jobsFound } = await this.syncOnceWithDetails();
       this.setStatus(`delivered ${entries.length} item${entries.length === 1 ? "" : "s"}`);
       return { success: true, entries, jobsFound };
-    } catch (e: any) {
+    } catch (e: unknown) {
       error("Sync error", e);
       captureException(e, { context: "syncWithLogs" });
       this.setStatus("Error");
-      return { success: false, entries: [], error: e?.message ?? String(e), jobsFound: 0 };
+      return { success: false, entries: [], error: errorMessage(e), jobsFound: 0 };
     } finally {
       this.isSyncing = false;
     }
@@ -401,11 +404,11 @@ export default class FlowStatePlugin extends Plugin {
       const paths = await this.syncOnce();
       this.setStatus(`delivered ${paths.length} item${paths.length === 1 ? "" : "s"}`);
       return paths;
-    } catch (e: any) {
+    } catch (e: unknown) {
       error("Sync error", e);
       captureException(e, { context: "syncNow" });
       this.setStatus("Error");
-      if (!silent) new Notice(`Flowstate sync error: ${e?.message ?? e}`);
+      if (!silent) new Notice(`Flowstate sync error: ${errorMessage(e)}`);
       return [];
     } finally {
       this.isSyncing = false;
@@ -493,7 +496,7 @@ export default class FlowStatePlugin extends Plugin {
     const needsRefresh = (r?: Route) => {
       if (!r) return true;
       if (!r.destination_location || !String(r.destination_location).trim()) return true;
-      if ((r as any).include_original_file == null) return true;
+      if (r.include_original_file == null) return true;
       return false;
     };
     const refresh = needsRefresh(route);
@@ -510,9 +513,9 @@ export default class FlowStatePlugin extends Plugin {
       log(`writeJobToVault: using cached route ${routeId}`);
     }
     const destinationLocation = normalizePath(route!.destination_location!.trim());
-    const appendMode = !!(route as any).append_to_existing;
-    const includeOriginal = (route as any).include_original_file as boolean | null | undefined;
-    const destConfig = ((route as any).destination_config ?? {}) as Record<string, any>;
+    const appendMode = !!route!.append_to_existing;
+    const includeOriginal = route!.include_original_file;
+    const destConfig = (route!.destination_config ?? {}) as Record<string, unknown>;
     const embedOriginal = destConfig.embed_original !== false; // default true
     log(`writeJobToVault: route fields dest="${destinationLocation}" appendMode=${appendMode} includeOriginal=${includeOriginal} embedOriginal=${embedOriginal}`);
 
@@ -572,9 +575,8 @@ export default class FlowStatePlugin extends Plugin {
       const exists = await app.vault.adapter.exists(filePath);
       if (exists) {
         const f = this.app.vault.getAbstractFileByPath(filePath);
-        if (f && (f as any).extension !== undefined) {
-          // TFile
-          const tf = f as any;
+        if (f instanceof TFile) {
+          const tf = f;
           const existing = await this.app.vault.read(tf);
           const combined = existing ? `${existing}\n\n${content}` : content;
           await this.app.vault.modify(tf, combined);
@@ -615,9 +617,12 @@ export default class FlowStatePlugin extends Plugin {
     return `${base} ${i}${ext}`;
   }
 
-  async maybeDownloadOriginal(it: Job & { original_file_url?: string; metadata?: any }, baseFolder?: string): Promise<string | null> {
+  async maybeDownloadOriginal(it: Job & { original_file_url?: string; metadata?: unknown }, baseFolder?: string): Promise<string | null> {
     log('maybeDownloadOriginal: starting for job', it.id);
-    const meta = (it as any).metadata ?? {};
+    const meta = (it.metadata ?? {}) as {
+      original_object?: { bucket?: string; name?: string };
+      original_file_url?: string;
+    };
     log('maybeDownloadOriginal: metadata', JSON.stringify(meta, null, 2));
     
     let bucket: string | null = null;
@@ -656,10 +661,10 @@ export default class FlowStatePlugin extends Plugin {
         } else {
           // If not a storage URL, try to download directly
           log('maybeDownloadOriginal: downloading file directly from URL', normalizedUrl);
-          const response = await fetch(normalizedUrl);
-          if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-          
-          const data = await response.arrayBuffer();
+          const response = await requestUrl({ url: normalizedUrl });
+          if (response.status >= 400) throw new Error(`HTTP error! status: ${response.status}`);
+
+          const data = response.arrayBuffer;
           const fileName = fileUrl.split('/').pop() || 'original';
           const savedPath = await writeBinaryToAttachments(this.app, fileName, new Uint8Array(data));
           log('maybeDownloadOriginal: saved file from direct URL', savedPath);
