@@ -282,7 +282,7 @@ export default class FlowStatePlugin extends Plugin {
             if (route) {
               this.settingsTab.openProjectEditor(route);
             } else {
-              new Notice("Project not found");
+              new Notice("Flow not found");
             }
           }
         } catch (e: any) {

@@ -76,14 +76,14 @@ export class FlowStateSettingTab extends PluginSettingTab {
             this.editingRoute = route;
             this.display(); // Re-render with the project editor
           } else {
-            new Notice("Project not found");
+            new Notice("Flow not found");
             this.display(); // Show normal list view
           }
         } catch (e: any) {
           // Bail out if a newer display() was called
           if (this.displayGeneration !== generation) return;
           console.error("Failed to load deferred project:", e);
-          new Notice(`Failed to load project: ${e?.message ?? e}`);
+          new Notice(`Failed to load Flow: ${e?.message ?? e}`);
           this.display(); // Show normal list view on error
         }
       })();
@@ -275,7 +275,7 @@ export class FlowStateSettingTab extends PluginSettingTab {
 
         const projectsArrow = projectsHeaderRow.createSpan({ text: "▾" });
         projectsArrow.style.fontSize = "0.9em";
-        const projectsTitle = projectsHeaderRow.createEl("h2", { text: "Projects" });
+        const projectsTitle = projectsHeaderRow.createEl("h2", { text: "Flows" });
         projectsTitle.style.fontSize = "1.5em";
         projectsTitle.style.margin = "0";
 
@@ -294,7 +294,7 @@ export class FlowStateSettingTab extends PluginSettingTab {
 
         // Projects description and buttons
         const header = new Setting(projectsBody)
-          .setDesc("Projects describe how to transcribe and save your uploads.");
+          .setDesc("Flows describe how to transcribe and save your uploads.");
         header.settingEl.style.borderTop = "none";
         header.settingEl.style.paddingTop = "0";
         header.settingEl.style.marginTop = "0";
@@ -303,7 +303,7 @@ export class FlowStateSettingTab extends PluginSettingTab {
         );
         header.addButton((b) =>
           b.setCta()
-            .setButtonText("Add Project")
+            .setButtonText("Add Flow")
             .onClick(() => {
               this.editingRoute = null;
               this.display();
@@ -316,7 +316,7 @@ export class FlowStateSettingTab extends PluginSettingTab {
           flowsListHost.empty();
           if (routes.length === 0) {
             const empty = flowsListHost.createDiv({ cls: "setting-item-description" });
-            empty.setText("Create your first project. Projects tell Flowstate where to save different types of notes.");
+            empty.setText("Create your first Flow. Flows tell Flowstate where to save different types of notes.");
             return;
           }
           for (const r of routes) {
@@ -356,14 +356,14 @@ export class FlowStateSettingTab extends PluginSettingTab {
               el.style.border = "1px solid var(--text-muted)";
               el.style.color = "var(--text-normal)";
               b.onClick(async () => {
-                const ok = window.confirm(`Archive project "${r.name}"? It will no longer appear in your projects list.`);
+                const ok = window.confirm(`Archive Flow "${r.name}"? It will no longer appear in your Flows list.`);
                 if (!ok) return;
                 try {
                   const supa = getSupabase(this.settings);
                   await deleteRoute(supa, r.id);
                   if (this.settings.routes) delete this.settings.routes[r.id];
                   await this.plugin.saveData(this.settings);
-                  new Notice("Project archived");
+                  new Notice("Flow archived");
                   this.display();
                 } catch (e: any) {
                   console.error(e);
@@ -386,7 +386,7 @@ export class FlowStateSettingTab extends PluginSettingTab {
           renderRows(cachedForUser as Route[]);
         } else {
           const loading = flowsListHost.createDiv({ cls: "setting-item-description" });
-          loading.setText("Loading projects…");
+          loading.setText("Loading Flows…");
         }
 
         // Fetch fresh from Supabase, update cache, and re-render
