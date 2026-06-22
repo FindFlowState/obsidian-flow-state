@@ -14,13 +14,18 @@ export type PluginSettings = {
   routes?: Record<string, Route>;
   // Last known signed-in user id to filter cached routes without awaiting auth
   lastUserId?: string;
+  // Supabase auth token storage, persisted in data.json so the session survives
+  // plugin updates/reloads (Obsidian doesn't reliably persist localStorage,
+  // especially on mobile). Backs the custom auth storage adapter in supabase.ts.
+  authStore?: Record<string, string>;
 };
 
 export const DEFAULT_SETTINGS: PluginSettings = {
   supabaseUrl: "",
   supabaseAnonKey: "",
   routes: {},
-  lastUserId: ""
+  lastUserId: "",
+  authStore: {}
 };
 
 export class FlowStateSettingTab extends PluginSettingTab {

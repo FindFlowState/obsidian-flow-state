@@ -1,7 +1,7 @@
 import { Notice, Platform, Plugin, normalizePath, requestUrl, TFile } from "obsidian";
 import type { Job, Route } from "./types";
 import { FlowStateSettingTab, PluginSettings, DEFAULT_SETTINGS } from "./settings";
-import { getSupabase, exchangeFromObsidianParams, fetchRouteById, ensureObsidianConnection, updateRoute } from "./supabase";
+import { getSupabase, createDataJsonAuthStorage, exchangeFromObsidianParams, fetchRouteById, ensureObsidianConnection, updateRoute } from "./supabase";
 import { DEFAULT_SUPABASE_URL, DEFAULT_SUPABASE_ANON_KEY } from "./config";
 import { ensureFolder, atomicWrite, writeBinaryToAttachments, buildSafeNoteFilename } from "./fs";
 import { downloadFromStorage } from "./storage";
@@ -37,6 +37,12 @@ export default class FlowStatePlugin extends Plugin {
     this.lastSyncCooldownStart = Date.now();
 
     await this.loadSettings();
+
+    // Initialize the Supabase client FIRST, with a data.json-backed auth storage
+    // adapter, so the session survives plugin updates/reloads (Obsidian doesn't
+    // reliably persist localStorage). getSupabase is a singleton, so every later
+    // caller reuses this instance.
+    getSupabase(this.settings, createDataJsonAuthStorage(this));
 
     // Settings tab
     this.settingsTab = new FlowStateSettingTab(this.app, this, this.settings, async () => {
