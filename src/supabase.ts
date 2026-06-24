@@ -15,17 +15,80 @@ type ConnectionMetadata = {
 
 let client: SupabaseClient<Database> | null = null;
 
-export function getSupabase(settings: PluginSettings): SupabaseClient<Database> {
+/**
+ * Supabase auth storage adapter — a structural subset of supabase-js's
+ * `SupportedStorage` that we implement (get/set/remove, sync or async).
+ */
+export type AuthStorageAdapter = {
+  getItem: (key: string) => string | null | Promise<string | null>;
+  setItem: (key: string, value: string) => void | Promise<void>;
+  removeItem: (key: string) => void | Promise<void>;
+};
+
+/** Minimal slice of the plugin the data.json auth adapter needs. */
+export interface AuthStorageHost {
+  settings: { authStore?: Record<string, string> };
+  saveData: (data: unknown) => Promise<void>;
+}
+
+/**
+ * Auth storage adapter backed by the plugin's `data.json` (via
+ * `settings.authStore` + `saveData`), so the Supabase session survives plugin
+ * updates/reloads — Obsidian doesn't reliably persist `localStorage` across
+ * updates, especially on mobile. On first read a key falls back to
+ * `localStorage` and is migrated into `data.json`, so introducing this adapter
+ * doesn't sign existing users out.
+ */
+export function createDataJsonAuthStorage(host: AuthStorageHost): AuthStorageAdapter {
+  const store = (): Record<string, string> => (host.settings.authStore ??= {});
+  return {
+    getItem: (key) => {
+      const current = store()[key];
+      if (current != null) return current;
+      // One-time migration: supabase-js previously wrote the session to the
+      // renderer's window.localStorage. Read it once (App#loadLocalStorage can't
+      // see it — different namespace) and migrate it into data.json.
+      try {
+        const legacy = typeof window !== "undefined" ? window.localStorage?.getItem(key) ?? null : null;
+        if (legacy != null) {
+          store()[key] = legacy;
+          void host.saveData(host.settings);
+          return legacy;
+        }
+      } catch {
+        /* window.localStorage may be unavailable */
+      }
+      return null;
+    },
+    setItem: async (key, value) => {
+      store()[key] = value;
+      await host.saveData(host.settings);
+    },
+    removeItem: async (key) => {
+      if (key in store()) {
+        delete store()[key];
+        await host.saveData(host.settings);
+      }
+    },
+  };
+}
+
+export function getSupabase(
+  settings: PluginSettings,
+  storage?: AuthStorageAdapter
+): SupabaseClient<Database> {
   if (client) return client;
   const url = (settings.supabaseUrl || DEFAULT_SUPABASE_URL).trim();
   const key = (settings.supabaseAnonKey || DEFAULT_SUPABASE_ANON_KEY).trim();
   // Log where we're pointing (mask key)
   const keyPrefix = key ? key.slice(0, 8) : "";
-  log("supabase:init", { url, anonKeyPrefix: keyPrefix });
+  log("supabase:init", { url, anonKeyPrefix: keyPrefix, persistedAuth: !!storage });
   client = createClient<Database>(url, key, {
     auth: {
-      persistSession: true
-    }
+      persistSession: true,
+      autoRefreshToken: true,
+      ...(storage ? { storage } : {}),
+    },
   });
   return client;
 }
