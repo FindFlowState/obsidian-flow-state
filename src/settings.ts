@@ -197,9 +197,11 @@ export class FlowStateSettingTab extends PluginSettingTab {
               const confirmLogout = window.confirm("Are you sure you want to log out of Flowstate?");
               if (!confirmLogout) return;
               await supaSignOut(supabase);
-              // Clear cached routes and user id on logout so we don't show stale data
+              // Clear cached routes, user id, and vault connection on logout so we
+              // don't show stale data (or scope to the previous account's connection).
               this.settings.routes = {};
               this.settings.lastUserId = "";
+              this.plugin.clearMyConnectionId();
               await this.plugin.saveData(this.settings);
               new Notice("Signed out");
               this.display();
@@ -389,8 +391,12 @@ export class FlowStateSettingTab extends PluginSettingTab {
           loading.setText("Loading Flows…");
         }
 
-        // Fetch fresh from Supabase, update cache, and re-render
-        const rows: Route[] = await listObsidianRoutes(supabase);
+        // Fetch fresh from Supabase, update cache, and re-render. Scope to this
+        // vault's connection; if it can't be resolved, keep the cached render.
+        const connectionId = await this.plugin.getMyConnectionId();
+        if (this.displayGeneration !== generation) return;
+        if (!connectionId) return;
+        const rows: Route[] = await listObsidianRoutes(supabase, connectionId);
         // Bail out if a newer display() was called
         if (this.displayGeneration !== generation) return;
         const valid: Route[] = [];

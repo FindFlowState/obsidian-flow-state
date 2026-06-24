@@ -24,6 +24,8 @@ export default class FlowStatePlugin extends Plugin {
   // Suppress focus-triggered sync briefly after deep link sync or plugin load (ms)
   private static readonly FOCUS_SYNC_COOLDOWN_MS = 3000;
   private lastSyncCooldownStart = 0;
+  // Cached connection id for THIS vault (see getMyConnectionId). Cleared on sign-out.
+  private myConnectionId: string | null = null;
 
   async onload() {
     // Initialize Sentry error tracking (prod builds only)
@@ -116,7 +118,9 @@ export default class FlowStatePlugin extends Plugin {
           try {
             const supabase = getSupabase(this.settings);
             await exchangeFromObsidianParams(supabase, params, "obsidian://flow-state");
-            await ensureObsidianConnection(supabase, this.app);
+            // Refresh the cached vault connection id for the freshly signed-in account.
+            this.clearMyConnectionId();
+            this.myConnectionId = await ensureObsidianConnection(supabase, this.app);
             this.settingsTab?.display();
           } catch (e: any) {
             error("OAuth exchange failed", e);
@@ -412,16 +416,46 @@ export default class FlowStatePlugin extends Plugin {
     }
   }
 
-  /** Fetch all pending (transcribed) jobs for active Obsidian routes */
+  /**
+   * Resolve (and cache) the Obsidian connection id for THIS vault. The plugin
+   * scopes the Flows it lists and the jobs it syncs to this connection, so one
+   * account connected from several vaults/devices keeps each vault's Flows
+   * separate. Returns null if it can't be resolved (e.g. not signed in).
+   */
+  async getMyConnectionId(): Promise<string | null> {
+    if (this.myConnectionId) return this.myConnectionId;
+    try {
+      const supabase = getSupabase(this.settings);
+      this.myConnectionId = await ensureObsidianConnection(supabase, this.app);
+    } catch (e) {
+      warn("getMyConnectionId: failed to resolve vault connection", e);
+      return null;
+    }
+    return this.myConnectionId;
+  }
+
+  /** Forget the cached vault connection id (call on sign-out / account switch). */
+  clearMyConnectionId(): void {
+    this.myConnectionId = null;
+  }
+
+  /** Fetch pending (transcribed) jobs for THIS vault's active Obsidian routes */
   async fetchPendingJobs(): Promise<Job[]> {
     const supabase = getSupabase(this.settings);
 
-    // Single-query join to filter Obsidian routes (only active routes)
+    const connectionId = await this.getMyConnectionId();
+    if (!connectionId) {
+      log("fetchPendingJobs: no vault connection resolved; skipping");
+      return [];
+    }
+
+    // Single-query join, scoped to THIS vault's connection (only active routes).
     const { data: items, error: jErr } = await supabase
       .from("jobs")
       .select(`*, routes!inner(*, connections!inner(service_type))`)
       .eq("status", "transcribed")
       .eq("routes.is_active", true)
+      .eq("routes.connection_id", connectionId)
       .eq("routes.connections.service_type", "obsidian")
       .order("created_at", { ascending: true })
       .limit(10);
