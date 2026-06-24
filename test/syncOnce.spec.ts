@@ -20,10 +20,15 @@ vi.mock('../src/supabase', async () => {
     getSupabase: () => ({
       from: (table: string) => {
         if (table === 'jobs') {
+          // Chainable so any number of .eq()/.order() before .limit() resolves to
+          // the jobs array (fetchPendingJobs now also filters by connection_id).
+          const selectChain: any = {
+            eq: () => selectChain,
+            order: () => selectChain,
+            limit: () => ({ data: jobs, error: null }),
+          };
           return {
-            select: () => ({
-              eq: () => ({ eq: () => ({ eq: () => ({ order: () => ({ limit: () => ({ data: jobs, error: null }) }) }) }) })
-            }),
+            select: () => selectChain,
             update: (patch: any) => ({
               eq: () => ({ eq: () => { updates.push(patch); return { data: null, error: null }; } })
             }),
@@ -35,7 +40,8 @@ vi.mock('../src/supabase', async () => {
     }),
     exchangeFromObsidianParams: vi.fn(),
     fetchRouteById: vi.fn(async (_supabase: any, id: string) => baseRoute({ id } as any)),
-    ensureObsidianConnection: vi.fn(),
+    // The plugin resolves THIS vault's connection before fetching jobs/routes.
+    ensureObsidianConnection: vi.fn(async () => 'conn1'),
   };
 });
 
@@ -76,6 +82,12 @@ describe('fetchPendingJobs', () => {
     const result = await (plugin as any).fetchPendingJobs();
     expect(result).toHaveLength(jobs.length);
     expect(result[0].id).toBe('job1');
+  });
+
+  it('returns nothing when this vault has no resolvable connection', async () => {
+    (plugin as any).getMyConnectionId = async () => null;
+    const result = await (plugin as any).fetchPendingJobs();
+    expect(result).toHaveLength(0);
   });
 });
 

@@ -230,18 +230,22 @@ export async function ensureObsidianConnection(
 }
 
 export async function listObsidianRoutes(
-  supabase: SupabaseClient<Database>
+  supabase: SupabaseClient<Database>,
+  connectionId: string
 ): Promise<Route[]> {
   const { data: userData, error: userErr } = await supabase.auth.getUser();
   if (userErr) throw userErr;
   const uid = userData.user?.id;
   if (!uid) throw new Error("Not signed in");
-  log("routes:list:query", { uid });
+  log("routes:list:query", { uid, connectionId });
+  // Scope to THIS vault's connection so the plugin only ever lists Flows that
+  // belong to this vault — not other vaults/devices the same account connected.
   const { data, error } = await supabase
     .from("routes")
     .select(`*, connections!inner(service_type)`)
     .eq("user_id", uid)
     .eq("is_active", true)
+    .eq("connection_id", connectionId)
     .eq("connections.service_type", "obsidian")
     .order("id", { ascending: true });
   if (error) throw error;
