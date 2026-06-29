@@ -1,177 +1,57 @@
 # Flowstate (Obsidian Plugin)
 
-[Flowstate](https://seekflowstate.com) is the missing bridge between your offline notes and your digital brain. The app transcribes handwritten notes and voice memos using AI, and automatically syncs them to your Obsidian vault.
+*Your handwriting knows*<br>
+*things a keyboard never will*<br>
+*now it's in your vault*
 
-## Features
+[Flowstate](https://seekflowstate.com) gets handwritten pages and voice notes into your Obsidian vault, transcribed and formatted and filed exactly where you want them.
 
-- **AI-powered transcription:** Handwritten notes and audio recordings are transcribed using advanced AI, with automatic file naming based on content.
-- **Enrichment options:** Go beyond transcription—translate, summarize, add context, extract action items, turn circled words into hashtags, and more.
-- **Custom destinations:** Choose the exact folder in your vault where you want your notes saved. Create different flows for different purposes.
-- **Append mode:** Create new files for each note, or append to a single file with auto-generated headings.
-- **Download originals:** Optionally save the original handwriting images or audio files as embedded attachments.
-- **Multiple flows:** Create separate flows for different kinds of notes, each with its own AI instructions and save location.
-- **Email upload:** Get a unique email address for each flow to send handwritten notes and voice memos for transcription.
-- **Automatic sync:** Notes sync to your vault automatically in the background—no manual action required.
+Capture on paper, on an e-ink tablet, or by speaking out loud on a brisk morning walk. Flowstate handles the messy workflows in the middle, then your words land in your vault as lovely, searchable plain text.
 
-## Installation & Setup
+### How it works with Obsidian
 
-### Requirements
-- Obsidian v1.2.0 or newer
-- A Flowstate account (free to create)
+Connect your vault through our Obsidian plugin, then set up workflows that match how you want to work. A few examples of what people do:
 
-### Option A: Install from Community Plugins (Recommended)
+- Send your morning pages or journal entries into a dedicated folder, dated and titled automatically
+- Take meeting notes on an e-ink tablet, email it to Flowstate, then get a clean summary and action items formatted as tasks
+- Drop research and reading notes into a dedicated folder, with Flowstate making proactive suggestions for additional books/resources to check out.
+- Send a whiteboard photo straight into a project folder as a clean markdown note
+- Translate all of your handwritten notes into pig latin (hilarious, but not recommended)
 
-Flowstate is available in Obsidian's official community plugin store.
+You set the rules once. After that it's a single tap from capture to vault.
 
-1. Open **Settings → Community plugins → Browse**
-2. Search for **Flowstate** (or open the [plugin page](https://obsidian.md/plugins?id=flow-state) directly)
-3. Click **Install**, then **Enable**
-4. Skip to [Step 4: Connect Your Account](#step-4-connect-your-account) below
+### Capture however you like
 
-### Option B: Manual Install
+- Snap a photo of a handwritten page
+- Record a voice memo
+- Upload a file or PDF
+- Email notes from your reMarkable, Boox, Supernote, or Daylight to your unique Flowstate address
+- Share text or audio from any app on your phone using our native share extensions for iOS and Android
 
-#### Step 1: Download the Plugin
+### More than transcription
 
-1. Go to the [latest release page](https://github.com/FindFlowstate/obsidian-flow-state/releases/latest)
-2. Under **Assets**, download these two files:
-   - `main.js`
-   - `manifest.json`
+In addition to transcribing, Flowstate can clean up the formatting, summarize a long entry, translate it, pull out action items, or even write Shakespearean sonnets about your notes.
 
-#### Step 2: Install in Your Vault
+With custom instructions you can push it further and shape notes however you like. Add custom frontmatter. Tell Obsidian how to interpret and format those custom shorthand symbols you use that look like Egyptian hieroglyphics. Sky's the limit.
 
-1. Open your Obsidian vault folder in Finder (Mac) or File Explorer (Windows):
-   - **Mac:** In Obsidian, right-click your vault name in the sidebar → "Reveal in Finder"
-   - **Windows:** In Obsidian, right-click your vault name in the sidebar → "Show in system explorer"
-2. Open the `.obsidian` folder (this folder may be hidden—see note below)
-3. Open the `plugins` folder inside `.obsidian` (create it if it doesn't exist)
-4. Create a new folder called `flow-state`
-5. Move the downloaded `main.js` and `manifest.json` files into the `flow-state` folder
+## Work with other apps
 
-**Can't see the .obsidian folder?** It's hidden by default:
-- **Mac:** Press `Cmd + Shift + .` to show hidden files
-- **Windows:** In File Explorer, click View → Show → Hidden items
+We built Flowstate with Obsidian in mind (because we're both power users), but it also integrates with Notion, Google Docs, and OneNote. If you use any of these other tools for work or collaboration, Flowstate can help you pipe your handwriting and voice transcriptions there, too!
 
-#### Step 3: Enable the Plugin
+## Human-friendly pricing
 
-1. Open Obsidian
-2. Go to **Settings** (gear icon in the bottom-left)
-3. Click **Community plugins** in the left sidebar
-4. If prompted, click "Turn on community plugins"
-5. Find **Flowstate** in the list and toggle it **on**
+Start with 50 free credits. One page of handwriting or one minute of audio is one credit. Subscribe for monthly credits that roll over, or grab top-up packs that never expire.
 
-### Step 4: Connect Your Account
+Built by two brothers from other mothers who still write by hand and wanted their pages to live in their favorite app.
 
-1. Still in Settings, click **Flowstate** under Community plugins
-2. Enter your email address and click **Connect**
-3. Check your email for a magic link and click it to sign in (check spam if needed)
+—Raj and Rob
 
-If you don't have a Flowstate account, one will be created automatically.
+---
 
-## Using the Plugin
+## Installation & setup
 
-### Create a Flow
+New here? See **[Installation & setup](docs/installation.md)** to install Flowstate from the community store (or manually) and connect your account.
 
-Flows control where and how notes are saved. You can create multiple flows to handle different types of notes differently.
+## Using the plugin
 
-1. Open **Settings → Community plugins → Flowstate**
-2. Click **Add Flow**
-3. Configure your flow settings (see below)
-4. Click **Save**
-
-#### Basic Settings
-
-- **Name:** A descriptive name for your flow (e.g., "Journal Entries", "Meeting Notes")
-- **Append to existing:**
-  - **Off (default):** Each upload creates a new file in your destination folder
-  - **On:** All uploads append to a single file, with AI-generated headings separating each entry
-- **Destination:**
-  - If append is off: Choose a folder where new files will be created
-  - If append is on: Choose or create a file to append to
-
-#### Save Options (expandable section)
-
-- **Download Original:** When enabled, the original handwriting image or audio file is embedded in your note
-- **File Name / Note Heading Instructions:** Customize how AI generates titles. Examples:
-  - "Keep it short"
-  - "Include the date"
-  - "Use the main topic as the title"
-
-#### Enrichment Options (expandable section)
-
-- **Instructions:** Tell Flowstate's AI how to process your notes beyond basic transcription. Examples:
-  - "Translate to Spanish"
-  - "Summarize in bullet points"
-  - "Extract action items and format as a checklist"
-  - "Add context and book suggestions"
-  - "Turn circled words into hashtags"
-
-#### Email Options (expandable section, available after saving)
-
-- **Flow Tag:** A unique identifier used in your flow's email address
-- **Flow Email:** Send files to this address to auto-transcribe and save to this flow
-
-### Send a Note
-
-There are several ways to send notes to Flowstate:
-
-- **Mobile app:** Take a photo or record audio in the [Flowstate mobile app](https://seekflowstate.com), then tap to upload
-- **Email:** Send to your flow's unique email address
-  - Supports: 1 PDF, 1 audio file, or multiple PNG/JPG images (combined into one note)
-  - Subject line is ignored—the AI generates a title from the content
-
-### Sync Your Files
-
-Flowstate automatically syncs completed transcriptions to your vault. Here's how it works:
-
-- **Automatic background sync:** The plugin checks for new files every minute (desktop) or 5 minutes (mobile)
-- **Manual sync:** Open Settings → Flowstate → expand the **Sync** section → click **Sync Now**
-- **Command palette:** Press `Cmd/Ctrl + P` and search for "Flowstate: Sync Now"
-
-When you upload from the mobile app, Flowstate can automatically open the synced note in Obsidian once it's ready.
-
-### Credits
-
-Each page or minute of audio uses one credit. You get 50 free credits to get started.
-
-To check your balance, open Settings → Flowstate → expand the **Credits** section.
-
-Need more credits? Click **Manage Credits** to upgrade your plan or buy top-ups.
-
-## Privacy
-
-- No usage analytics or behavioral tracking are included in this plugin
-- Production builds include crash reporting via [Sentry](https://sentry.io) to help us fix bugs. It captures only errors originating from this plugin, sends no personally identifiable information, and collects no performance or usage data
-- Only your Flowstate outputs (and optionally original files) are written to your vault
-- Flowstate does not read or access any other files in your vault
-
-## Troubleshooting
-
-| Issue | Solution |
-|-------|----------|
-| **Flow email address not showing** | Email options only appear after a flow is saved. Create the flow first, then edit it to see email options. |
-| **Magic link not working** | Check your spam folder. Make sure you click the link on the same device where Obsidian is open. |
-| **Notes not syncing** | Open Settings → Flowstate → Sync → click "Sync Now". Check the sync logs for errors. |
-| **"Not signed in" error** | Go to Settings → Flowstate and reconnect your account. |
-| **Destination folder not found** | The plugin auto-creates folders, but make sure the path is valid. Edit your flow and re-select the destination. |
-
-## Support
-
-- Website: [seekflowstate.com](https://seekflowstate.com)
-- Issues: [GitHub Issues](https://github.com/FindFlowstate/obsidian-flow-state/issues)
-
-## Development
-
-Build requirements: Node 20+
-
-```sh
-npm install
-
-# Production build
-npm run build-prod
-
-# Local development build
-npm run build-local
-
-# Run tests
-npm test
-```
+Already installed? See **[Using the plugin](docs/usage.md)** for creating flows, sending notes, syncing, credits, privacy, troubleshooting, and development.
