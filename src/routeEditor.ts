@@ -157,12 +157,33 @@ export function renderRouteEditor(
 
   // Content type selection removed; processing determines type from MIME
 
+  // Foldable sections helper (default closed) with arrow indicator and extra spacing
+  const addFoldableSection = (parent: HTMLElement, heading: string) => {
+    const section = parent.createDiv({ cls: "fs-foldable-section" });
+    const header = section.createEl("div", { cls: "fs-section-header" });
+    const arrow = header.createEl("span", { text: "▸" });
+    header.createEl("span", { text: heading });
+    const body = section.createDiv({ cls: "fs-section-body" });
+    let open = false;
+    const update = () => {
+      body.toggleClass("fs-hidden", !open);
+      arrow.textContent = open ? "▾" : "▸";
+    };
+    header.addEventListener("click", () => { open = !open; update(); });
+    update();
+    return { section, header, body, setOpen: (v: boolean) => { open = v; update(); } };
+  };
+
+  // Save Options (foldable, open by default) — holds destination + save settings
+  const saveOptsFold = addFoldableSection(containerEl, "Save Options");
+  saveOptsFold.setOpen(true);
+
   // Append toggle
   let destinationSetting: Setting;
   let updateTitleInstrLabel: () => void;
-  new Setting(containerEl)
+  new Setting(saveOptsFold.body)
     .setName("Append to existing")
-    .setDesc("If on, destination should be a file. A heading will be added for each upload.")
+    .setDesc("If enabled, we'll add your transcriptions to an existing note. New headings will be created for each upload.")
     .addToggle((tg) => tg.setValue(appendToExisting).onChange((v) => {
       appendToExisting = v;
       destinationSetting.setName(appendToExisting ? "Destination File" : "Destination Folder");
@@ -177,7 +198,7 @@ export function renderRouteEditor(
     }));
 
   // Destination (inline typeahead with dynamic mode)
-  destinationSetting = new Setting(containerEl).setName(appendToExisting ? "Destination File" : "Destination Folder");
+  destinationSetting = new Setting(saveOptsFold.body).setName(appendToExisting ? "Destination File" : "Destination Folder");
   let destinationInputEl: HTMLInputElement;
   let destinationSuggest: AbstractInputSuggest<unknown> | null = null;
   const setupDestinationSuggest = () => {
@@ -223,26 +244,6 @@ export function renderRouteEditor(
   rebuildDestinationControl();
   applyWideControl(destinationSetting);
 
-  // Foldable sections helper (default closed) with arrow indicator and extra spacing
-  const addFoldableSection = (parent: HTMLElement, heading: string) => {
-    const section = parent.createDiv({ cls: "fs-foldable-section" });
-    const header = section.createEl("div", { cls: "fs-section-header" });
-    const arrow = header.createEl("span", { text: "▸" });
-    header.createEl("span", { text: heading });
-    const body = section.createDiv({ cls: "fs-section-body" });
-    let open = false;
-    const update = () => {
-      body.toggleClass("fs-hidden", !open);
-      arrow.textContent = open ? "▾" : "▸";
-    };
-    header.addEventListener("click", () => { open = !open; update(); });
-    update();
-    return { section, header, body, setOpen: (v: boolean) => { open = v; update(); } };
-  };
-
-  // Save Options (foldable)
-  const saveOptsFold = addFoldableSection(containerEl, "Save Options");
-
   // Title Instructions (dynamic name/desc based on append mode)
   const titleInstrSetting = new Setting(saveOptsFold.body)
     .addTextArea((ta) => {
@@ -255,8 +256,8 @@ export function renderRouteEditor(
     titleInstrSetting.setName(appendToExisting ? "Note Heading Instructions" : "File Name Instructions");
     titleInstrSetting.setDesc(
       appendToExisting
-        ? "Note headings are automatically generated. Provide optional instructions for how you want them named."
-        : "File names are automatically generated. Provide optional instructions for how you want them named."
+        ? "We name headings automatically. But if you have your own preferences, describe 'em here!"
+        : "We name your files automatically. But if you have your own preferences, describe 'em here!"
     );
   };
   updateTitleInstrLabel();
