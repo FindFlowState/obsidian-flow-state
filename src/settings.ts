@@ -104,17 +104,23 @@ export class FlowStateSettingTab extends PluginSettingTab {
 
     // Intro text with Learn more link on same line
     const intro = containerEl.createEl("div", { cls: "fs-intro" });
-    intro.appendText("Integrate handwritten notes and voice recordings into Obsidian. ");
+    intro.appendText("Your handwriting and voice, transcribed and filed in Obsidian. ");
     intro.createEl("a", { text: "Learn more →", href: "https://seekflowstate.com", cls: "fs-muted-link" });
 
     // How it works bullets (will be hidden when signed in)
     const bulletsSection = containerEl.createDiv({ cls: "fs-onboarding-bullets" });
-    const bullets = [
-      "Upload your handwriting or voice note to the Flowstate app. Take a photo, record audio, or send an email.",
-      "Flowstate transcribes your note and enriches it with AI. For example, it can translate, summarize, or extract action items.",
-      "Notes sync automatically to your vault. The original note is also saved as an attachment.",
-    ];
     const bulletList = bulletsSection.createEl("ul", { cls: "fs-onboarding-list" });
+
+    // First bullet links "Flowstate app" to the website (which has the iOS/Android download links)
+    const firstBullet = bulletList.createEl("li");
+    firstBullet.appendText("Capture your handwriting or voice through the ");
+    firstBullet.createEl("a", { text: "Flowstate app", href: "https://seekflowstate.com", cls: "fs-muted-link" });
+    firstBullet.appendText(", or send an email from an e-ink tablet.");
+
+    const bullets = [
+      "Flowstate transcribes and formats automatically. You can also ask us for summaries, translations, poems, etc. Anything your heart desires.",
+      "Plain text notes sync seamlessly to your vault. The original PDF or audio can be saved as an attachment.",
+    ];
     for (const bullet of bullets) {
       bulletList.createEl("li", { text: bullet });
     }
@@ -408,91 +414,6 @@ export class FlowStateSettingTab extends PluginSettingTab {
         // Bail out if a newer display() was called
         if (this.displayGeneration !== generation) return;
         renderRows(valid);
-
-        // Sync section (collapsible, collapsed by default)
-        containerEl.createDiv({ cls: "fs-divider" });
-
-        const syncSection = containerEl.createDiv({ cls: "fs-sync-section" });
-        const syncHeaderRow = syncSection.createDiv({ cls: "fs-section-header-row" });
-
-        const syncArrow = syncHeaderRow.createSpan({ text: "▸", cls: "fs-section-arrow" });
-        syncHeaderRow.createEl("div", { text: "Sync", cls: "fs-section-title" });
-
-        const syncBody = syncSection.createDiv();
-        let syncOpen = false;
-
-        const updateSyncVisibility = () => {
-          syncBody.toggleClass("fs-hidden", !syncOpen);
-          syncArrow.textContent = syncOpen ? "▾" : "▸";
-        };
-        syncHeaderRow.addEventListener("click", () => {
-          syncOpen = !syncOpen;
-          updateSyncVisibility();
-        });
-        updateSyncVisibility();
-
-        // Sync description
-        const syncDesc = syncBody.createDiv({ cls: "fs-section-desc" });
-        syncDesc.setText("Pull transcribed notes from Flowstate to your vault.");
-
-        // Sync log area
-        const syncLogArea = syncBody.createEl("textarea", { cls: "fs-sync-log" });
-        syncLogArea.readOnly = true;
-        syncLogArea.placeholder = "Sync logs will appear here...";
-
-        // Sync buttons row
-        const syncButtonRow = new Setting(syncBody);
-        syncButtonRow.settingEl.addClass("fs-setting-no-border-pad");
-
-        let isSyncing = false;
-        syncButtonRow.addButton((b) =>
-          b.setCta().setButtonText("Sync Now").onClick(async () => {
-            if (isSyncing) return;
-            isSyncing = true;
-            b.setButtonText("Syncing...");
-            b.setDisabled(true);
-
-            const timestamp = new Date().toLocaleTimeString();
-            syncLogArea.value += `[${timestamp}] Starting sync...\n`;
-            syncLogArea.scrollTop = syncLogArea.scrollHeight;
-
-            try {
-              const result = await this.plugin.syncWithLogs();
-              const endTime = new Date().toLocaleTimeString();
-
-              if (!result.success) {
-                syncLogArea.value += `[${endTime}] Error: ${result.error}\n`;
-              } else if (result.entries.length === 0) {
-                syncLogArea.value += `[${endTime}] No new files to sync (${result.jobsFound} job(s) found)\n`;
-              } else {
-                syncLogArea.value += `[${endTime}] Synced ${result.entries.length} file(s):\n`;
-                for (const entry of result.entries) {
-                  syncLogArea.value += `  → ${entry.path}\n`;
-                }
-              }
-              syncLogArea.value += "\n";
-            } catch (e: unknown) {
-              const endTime = new Date().toLocaleTimeString();
-              syncLogArea.value += `[${endTime}] Error: ${errorMessage(e)}\n\n`;
-            }
-
-            syncLogArea.scrollTop = syncLogArea.scrollHeight;
-            b.setButtonText("Sync Now");
-            b.setDisabled(false);
-            isSyncing = false;
-          })
-        );
-        syncButtonRow.addButton((b) =>
-          b.setButtonText("Copy Logs").onClick(async () => {
-            await navigator.clipboard.writeText(syncLogArea.value);
-            new Notice("Logs copied to clipboard");
-          })
-        );
-        syncButtonRow.addButton((b) =>
-          b.setButtonText("Clear").onClick(() => {
-            syncLogArea.value = "";
-          })
-        );
 
         // Credits section (collapsible, collapsed by default)
         containerEl.createDiv({ cls: "fs-divider" });

@@ -348,40 +348,6 @@ export default class FlowStatePlugin extends Plugin {
     await this.syncNowAndGetPaths(silent);
   }
 
-  /** Sync with detailed logging for settings UI */
-  async syncWithLogs(): Promise<{ success: boolean; entries: { timestamp: Date; path: string; title: string; jobId: string }[]; error?: string; jobsFound: number }> {
-    if (this.isSyncing) {
-      return { success: false, entries: [], error: "Sync already in progress", jobsFound: 0 };
-    }
-    this.isSyncing = true;
-
-    try {
-      const hasUrl = !!(this.settings.supabaseUrl || DEFAULT_SUPABASE_URL);
-      const hasKey = !!(this.settings.supabaseAnonKey || DEFAULT_SUPABASE_ANON_KEY);
-      if (!hasUrl || !hasKey) {
-        return { success: false, entries: [], error: "Supabase not configured", jobsFound: 0 };
-      }
-
-      const supabase = getSupabase(this.settings);
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) {
-        return { success: false, entries: [], error: "Not signed in", jobsFound: 0 };
-      }
-
-      this.setStatus("Syncing...");
-      const { entries, jobsFound } = await this.syncOnceWithDetails();
-      this.setStatus(`delivered ${entries.length} item${entries.length === 1 ? "" : "s"}`);
-      return { success: true, entries, jobsFound };
-    } catch (e: unknown) {
-      error("Sync error", e);
-      captureException(e, { context: "syncWithLogs" });
-      this.setStatus("Error");
-      return { success: false, entries: [], error: errorMessage(e), jobsFound: 0 };
-    } finally {
-      this.isSyncing = false;
-    }
-  }
-
   /** Sync and return array of written file paths. Pass silent=true for background syncs to suppress notices. */
   async syncNowAndGetPaths(silent = false): Promise<string[]> {
     // Prevent concurrent syncs
@@ -505,25 +471,6 @@ export default class FlowStatePlugin extends Plugin {
       writtenPaths.push(writtenPath);
     }
     return writtenPaths;
-  }
-
-  /** Sync with detailed entry info for logging */
-  async syncOnceWithDetails(): Promise<{ entries: { timestamp: Date; path: string; title: string; jobId: string }[]; jobsFound: number }> {
-    const items = await this.fetchPendingJobs();
-    const jobsFound = items.length;
-
-    const entries: { timestamp: Date; path: string; title: string; jobId: string }[] = [];
-    for (const it of items) {
-      const writtenPath = await this.syncSingleJob(it);
-      entries.push({
-        timestamp: new Date(),
-        path: writtenPath,
-        title: it.final_title || it.original_filename || writtenPath.split("/").pop() || "Untitled",
-        jobId: it.id,
-      });
-    }
-
-    return { entries, jobsFound };
   }
 
   async writeJobToVault(it: Job, body: string): Promise<string> {
