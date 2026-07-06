@@ -148,7 +148,10 @@ export async function getCurrentSession(supabase: SupabaseClient<Database>) {
 }
 
 export async function signOut(supabase: SupabaseClient<Database>) {
-  const { error } = await supabase.auth.signOut();
+  // scope: 'local' revokes only this device's session. The default 'global'
+  // scope revokes every refresh token for the user, which logs them out on
+  // web and mobile too.
+  const { error } = await supabase.auth.signOut({ scope: 'local' });
   if (error) throw error;
 }
 
