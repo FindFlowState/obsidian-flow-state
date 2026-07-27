@@ -1,6 +1,6 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import type { Database, Route, RouteInsert, RouteUpdate } from "./types";
-import { FileSystemAdapter } from "obsidian";
+import { FileSystemAdapter, Platform } from "obsidian";
 import type { App } from "obsidian";
 import type { PluginSettings } from "./settings";
 import { DEFAULT_SUPABASE_URL, DEFAULT_SUPABASE_ANON_KEY } from "./config";
@@ -32,26 +32,68 @@ export interface AuthStorageHost {
 }
 
 /**
+ * Which device's slot of the auth store to use.
+ *
+ * `data.json` is itself synced between devices when Obsidian Sync is syncing
+ * plugin settings, so the session we persist there travels to the user's other
+ * devices. Supabase rotates the refresh token on every refresh and revokes the
+ * previous one, so two devices sharing a single token means whichever refreshes
+ * second gets "Invalid Refresh Token: Already Used" and is signed out — the
+ * phone and the desktop take turns kicking each other out.
+ *
+ * Scoping by platform keeps a phone and a desktop on separate sessions. Two
+ * devices on the *same* platform sharing one synced vault (two Macs, an iPhone
+ * and an iPad) still share a slot; `App#appId` would separate those too, but
+ * it's undocumented, and if it ever changed between launches it would sign the
+ * user out on every launch — the exact bug this is fixing.
+ */
+export function deviceAuthScope(): string {
+  return Platform.isMobile ? "mobile" : "desktop";
+}
+
+/**
  * Auth storage adapter backed by the plugin's `data.json` (via
  * `settings.authStore` + `saveData`), so the Supabase session survives plugin
  * updates/reloads — Obsidian doesn't reliably persist `localStorage` across
- * updates, especially on mobile. On first read a key falls back to
- * `localStorage` and is migrated into `data.json`, so introducing this adapter
- * doesn't sign existing users out.
+ * updates, especially on mobile.
+ *
+ * Keys are namespaced per device (see `deviceAuthScope`). On first read a key
+ * falls back to an unscoped `data.json` entry (written before namespacing) and
+ * then to `localStorage` (written before this adapter existed), migrating
+ * whatever it finds into this device's slot, so existing users aren't signed
+ * out.
  */
-export function createDataJsonAuthStorage(host: AuthStorageHost): AuthStorageAdapter {
+export function createDataJsonAuthStorage(
+  host: AuthStorageHost,
+  scope: string = deviceAuthScope()
+): AuthStorageAdapter {
   const store = (): Record<string, string> => (host.settings.authStore ??= {});
+  const scoped = (key: string) => `${scope}::${key}`;
   return {
     getItem: (key) => {
-      const current = store()[key];
+      const current = store()[scoped(key)];
       if (current != null) return current;
-      // One-time migration: supabase-js previously wrote the session to the
-      // renderer's window.localStorage. Read it once (App#loadLocalStorage can't
-      // see it — different namespace) and migrate it into data.json.
+
+      // Migration 1: an unscoped entry from before keys were namespaced. Claim
+      // it into this device's slot and drop the shared copy — leaving it in
+      // place would let the other device adopt the same session, which is what
+      // namespacing exists to prevent. Whichever device loads first keeps the
+      // session; the other signs in once more.
+      const unscoped = store()[key];
+      if (unscoped != null) {
+        store()[scoped(key)] = unscoped;
+        delete store()[key];
+        void host.saveData(host.settings);
+        return unscoped;
+      }
+
+      // Migration 2: supabase-js originally wrote the session to the renderer's
+      // window.localStorage. Read it once (App#loadLocalStorage can't see it —
+      // different namespace) and migrate it into data.json.
       try {
         const legacy = typeof window !== "undefined" ? window.localStorage?.getItem(key) ?? null : null;
         if (legacy != null) {
-          store()[key] = legacy;
+          store()[scoped(key)] = legacy;
           void host.saveData(host.settings);
           return legacy;
         }
@@ -61,14 +103,16 @@ export function createDataJsonAuthStorage(host: AuthStorageHost): AuthStorageAda
       return null;
     },
     setItem: async (key, value) => {
-      store()[key] = value;
+      store()[scoped(key)] = value;
       await host.saveData(host.settings);
     },
     removeItem: async (key) => {
-      if (key in store()) {
-        delete store()[key];
-        await host.saveData(host.settings);
-      }
+      // Drop any unscoped leftover alongside this device's entry so a sign-out
+      // can't leave a stale shared session behind.
+      const keys = [scoped(key), key].filter((k) => k in store());
+      if (keys.length === 0) return;
+      for (const k of keys) delete store()[k];
+      await host.saveData(host.settings);
     },
   };
 }
