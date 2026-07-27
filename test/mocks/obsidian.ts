@@ -33,30 +33,54 @@ export abstract class AbstractInputSuggest<T> {
   close() {}
 }
 
+// The adapter is raw disk. Writes through it land on disk WITHOUT being
+// registered with the Vault — which is exactly why the plugin must not use it
+// for attachments (Obsidian's file index, and Sync on top of it, never learn
+// about the file). `registered` below models that index.
 class Adapter {
-  fs = new Map<string, { type: 'file' | 'dir'; content?: string }>();
+  fs = new Map<string, { type: 'file' | 'dir'; content?: string; bytes?: Uint8Array }>();
   async exists(p: string): Promise<boolean> { return this.fs.has(p); }
   async writeBinary(p: string, ab: ArrayBuffer) {
-    const len = new Uint8Array(ab).byteLength;
-    this.fs.set(p, { type: 'file', content: String(len) });
+    this.fs.set(p, { type: 'file', bytes: new Uint8Array(ab) });
   }
 }
 
 class Vault {
   adapter: Adapter;
+  /** Paths Obsidian knows about, i.e. written through the Vault API. */
+  registered = new Set<string>();
   constructor() { this.adapter = new Adapter(); }
-  async createFolder(p: string) { this.adapter.fs.set(p, { type: 'dir' }); }
-  async create(p: string, c: string) { this.adapter.fs.set(p, { type: 'file', content: c }); }
+  async createFolder(p: string) { this.adapter.fs.set(p, { type: 'dir' }); this.registered.add(p); }
+  async create(p: string, c: string) {
+    this.adapter.fs.set(p, { type: 'file', content: c });
+    this.registered.add(p);
+    return new TFile(p);
+  }
+  async createBinary(p: string, ab: ArrayBuffer) {
+    if (this.adapter.fs.has(p)) throw new Error(`File already exists: ${p}`);
+    this.adapter.fs.set(p, { type: 'file', bytes: new Uint8Array(ab) });
+    this.registered.add(p);
+    return new TFile(p);
+  }
   async modify(f: TFile, c: string) { this.adapter.fs.set(f.path, { type: 'file', content: c }); }
+  async modifyBinary(f: TFile, ab: ArrayBuffer) {
+    this.adapter.fs.set(f.path, { type: 'file', bytes: new Uint8Array(ab) });
+  }
   async read(f: TFile) { return this.adapter.fs.get(f.path)?.content ?? ''; }
+  async readBinary(f: TFile) {
+    const bytes = this.adapter.fs.get(f.path)?.bytes ?? new Uint8Array();
+    return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
+  }
   getAbstractFileByPath(p: string) {
     const entry = this.adapter.fs.get(p);
-    if (!entry) return null;
+    // Unregistered files are invisible to Obsidian even though they're on disk.
+    if (!entry || !this.registered.has(p)) return null;
     return entry.type === 'dir' ? new TFolder(p) : new TFile(p);
   }
   getAllLoadedFiles(): Array<TFile | TFolder> {
     const out: Array<TFile | TFolder> = [];
     for (const [p, v] of this.adapter.fs.entries()) {
+      if (!this.registered.has(p)) continue;
       out.push(v.type === 'dir' ? new TFolder(p) : new TFile(p));
     }
     return out;

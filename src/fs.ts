@@ -63,7 +63,9 @@ export async function writeBinaryToAttachments(
 
   if (userFolder && userFolder.length > 0) {
     if (userFolder === "." || userFolder === "./") {
-      folder = baseFolder || ".";
+      // "Same folder as current file" — resolves to the vault root when we have
+      // no note folder to resolve against.
+      folder = baseFolder || "";
     } else if (userFolder.startsWith("./")) {
       const rel = userFolder.slice(2);
       folder = baseFolder ? `${baseFolder}/${rel}` : rel;
@@ -79,12 +81,14 @@ export async function writeBinaryToAttachments(
     folder = `${base}/${sub}`;
   }
 
-  folder = normalizePath(folder);
-  await ensureFolder(app, folder);
+  // A "." or empty folder means the vault root — there is nothing to create, and
+  // createFolder(".") would make a literal "." folder.
+  folder = folder === "." ? "" : normalizePath(folder);
+  if (folder) await ensureFolder(app, folder);
 
   // Compute a non-colliding path if needed
   const adapter = app.vault.adapter;
-  const makePath = (name: string) => normalizePath(`${folder}/${name}`);
+  const makePath = (name: string) => (folder ? normalizePath(`${folder}/${name}`) : normalizePath(name));
 
   let targetName = filename;
   let targetPath = makePath(targetName);
@@ -101,7 +105,23 @@ export async function writeBinaryToAttachments(
   const bytes = data instanceof Uint8Array ? data : new Uint8Array(data);
   const ab = new ArrayBuffer(bytes.byteLength);
   new Uint8Array(ab).set(bytes);
-  await adapter.writeBinary(targetPath, ab);
+
+  // Write through the Vault API, not vault.adapter. Adapter writes land on disk
+  // without registering the file with the Vault, so Obsidian's file index — and
+  // everything built on it, including Sync — can miss the attachment or hold a
+  // stale record of it. Desktop has a filesystem watcher that usually papers
+  // over this; iOS does not, which is how a note reaches another device with an
+  // unreadable 0-page PDF next to it.
+  try {
+    await app.vault.createBinary(targetPath, ab);
+  } catch (e: unknown) {
+    // The file appeared between the exists() check above and the create.
+    const msg = errorMessage(e);
+    if (!msg.includes("already exists")) throw e;
+    const f = app.vault.getAbstractFileByPath(targetPath);
+    if (!(f instanceof TFile)) throw e;
+    await app.vault.modifyBinary(f, ab);
+  }
   return targetPath;
 }
 

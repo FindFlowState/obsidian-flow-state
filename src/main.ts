@@ -653,7 +653,7 @@ export default class FlowStatePlugin extends Plugin {
 
           const data = response.arrayBuffer;
           const fileName = fileUrl.split('/').pop() || 'original';
-          const savedPath = await writeBinaryToAttachments(this.app, fileName, new Uint8Array(data));
+          const savedPath = await writeBinaryToAttachments(this.app, fileName, new Uint8Array(data), { baseFolder });
           log('maybeDownloadOriginal: saved file from direct URL', savedPath);
           return savedPath;
         }
@@ -673,7 +673,7 @@ export default class FlowStatePlugin extends Plugin {
       const data = await downloadFromStorage(supabase, bucket, name);
       const filename = name.split("/").pop() || "original";
       log('maybeDownloadOriginal: saving attachment', { filename, size: data?.byteLength });
-      const savedPath = await writeBinaryToAttachments(this.app, filename, data);
+      const savedPath = await writeBinaryToAttachments(this.app, filename, data, { baseFolder });
       log('maybeDownloadOriginal: saved attachment to', savedPath);
       return savedPath;
     } catch (e) {
