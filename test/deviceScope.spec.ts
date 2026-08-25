@@ -187,7 +187,7 @@ describe('two same-platform devices on one synced vault', () => {
     await macB.setItem(KEY, 'rt-B-1');
 
     // Mac A's session is gone — it now reads Mac B's token, refreshes with it,
-    // and Supabase revokes the family. This is what Rob was hitting.
+    // and Supabase revokes the family. This is the reported bug.
     expect(macA.getItem(KEY)).toBe('rt-B-1');
   });
 });
