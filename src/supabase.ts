@@ -29,6 +29,78 @@ export type AuthStorageAdapter = {
 export interface AuthStorageHost {
   settings: { authStore?: Record<string, string> };
   saveData: (data: unknown) => Promise<void>;
+  /** Obsidian's `App`, used to keep this device's id out of the synced vault. */
+  app?: LocalStorageHost;
+}
+
+/** Vault-local storage key holding this machine's device id. */
+const DEVICE_ID_KEY = "flow-state:device-id";
+
+/**
+ * The platform-only slot used before device ids existed.
+ *
+ * Still the scope we fall back to when no device id can be established, and
+ * the slot `createDataJsonAuthStorage` adopts a session from on first run.
+ */
+export function platformAuthScope(): string {
+  return Platform.isMobile ? "mobile" : "desktop";
+}
+
+/**
+ * The slice of Obsidian's `App` this module needs.
+ *
+ * `loadLocalStorage`/`saveLocalStorage` are vault-specific app storage, added
+ * in Obsidian 1.8.7 — our `minAppVersion`. They're app-level rather than vault
+ * files, so Obsidian Sync never carries them to another machine, which is
+ * exactly the property the scope needs.
+ */
+export type LocalStorageHost = {
+  /**
+   * Obsidian's per-install id. Undocumented — it isn't in `obsidian.d.ts` — so
+   * it's read defensively and only ever used to seed a fresh device id, never
+   * to replace one already stored.
+   */
+  appId?: string;
+  loadLocalStorage: (key: string) => unknown;
+  saveLocalStorage: (key: string, data: unknown) => void;
+};
+
+function readDeviceId(app: LocalStorageHost): string | null {
+  const value = app.loadLocalStorage(DEVICE_ID_KEY);
+  return typeof value === "string" && value ? value : null;
+}
+
+/**
+ * A stable id for this machine, or null if none can be established.
+ *
+ * A stored id always wins, so nothing below can move a device that already has
+ * a slot. Failing that we seed from Obsidian's install id: it survives storage
+ * being cleared, so re-deriving lands on the same slot instead of a new one and
+ * the user stays signed in. Only with no id to seed from do we mint one, and a
+ * minted id is read back before it's trusted — one that didn't persist would
+ * differ next launch and sign the user out every time, which is the bug this is
+ * fixing.
+ */
+export function deviceId(app?: LocalStorageHost): string | null {
+  if (!app) return null;
+  try {
+    const stored = readDeviceId(app);
+    if (stored) return stored;
+
+    const seed = typeof app.appId === "string" && app.appId ? app.appId : null;
+    if (seed) {
+      app.saveLocalStorage(DEVICE_ID_KEY, seed);
+      return seed;
+    }
+
+    const minted = crypto.randomUUID();
+    app.saveLocalStorage(DEVICE_ID_KEY, minted);
+    return readDeviceId(app) === minted ? minted : null;
+  } catch {
+    // Storage unavailable or throwing: fall back to the platform scope, which
+    // is how the plugin behaved before device ids existed.
+    return null;
+  }
 }
 
 /**
@@ -39,16 +111,19 @@ export interface AuthStorageHost {
  * devices. Supabase rotates the refresh token on every refresh and revokes the
  * previous one, so two devices sharing a single token means whichever refreshes
  * second gets "Invalid Refresh Token: Already Used" and is signed out — the
- * phone and the desktop take turns kicking each other out.
+ * two devices take turns kicking each other out.
  *
- * Scoping by platform keeps a phone and a desktop on separate sessions. Two
- * devices on the *same* platform sharing one synced vault (two Macs, an iPhone
- * and an iPad) still share a slot; `App#appId` would separate those too, but
- * it's undocumented, and if it ever changed between launches it would sign the
- * user out on every launch — the exact bug this is fixing.
+ * Scoping by platform alone left two devices on the *same* platform (two Macs,
+ * an iPhone and an iPad) sharing a slot and still fighting, so the scope also
+ * carries a per-machine device id (see `deviceId`). Where none can be
+ * established we degrade to the platform scope rather than a fresh id each
+ * launch — a scope that changes between launches would sign the user out every
+ * time, which is the bug this is fixing.
  */
-export function deviceAuthScope(): string {
-  return Platform.isMobile ? "mobile" : "desktop";
+export function deviceAuthScope(app?: LocalStorageHost): string {
+  const platform = platformAuthScope();
+  const id = deviceId(app);
+  return id ? `${platform}-${id}` : platform;
 }
 
 /**
@@ -58,14 +133,15 @@ export function deviceAuthScope(): string {
  * updates, especially on mobile.
  *
  * Keys are namespaced per device (see `deviceAuthScope`). On first read a key
- * falls back to an unscoped `data.json` entry (written before namespacing) and
- * then to `localStorage` (written before this adapter existed), migrating
- * whatever it finds into this device's slot, so existing users aren't signed
- * out.
+ * falls back, in order, to the platform-only slot (written before device ids),
+ * an unscoped `data.json` entry (written before any namespacing) and finally
+ * `localStorage` (written before this adapter existed), migrating whatever it
+ * finds into this device's slot, so existing users aren't signed out.
  */
 export function createDataJsonAuthStorage(
   host: AuthStorageHost,
-  scope: string = deviceAuthScope()
+  scope: string = deviceAuthScope(host.app),
+  legacyScope: string = platformAuthScope()
 ): AuthStorageAdapter {
   const store = (): Record<string, string> => (host.settings.authStore ??= {});
   const scoped = (key: string) => `${scope}::${key}`;
@@ -73,6 +149,21 @@ export function createDataJsonAuthStorage(
     getItem: (key) => {
       const current = store()[scoped(key)];
       if (current != null) return current;
+
+      // Migration 0: the platform-only slot from before device ids. Claim it
+      // the same way, so a lone device keeps its session across this upgrade.
+      // Deleting the source is what splits two same-platform devices apart:
+      // the first to load keeps the session, the second signs in once and
+      // then has a slot of its own.
+      if (legacyScope !== scope) {
+        const legacy = store()[`${legacyScope}::${key}`];
+        if (legacy != null) {
+          store()[scoped(key)] = legacy;
+          delete store()[`${legacyScope}::${key}`];
+          void host.saveData(host.settings);
+          return legacy;
+        }
+      }
 
       // Migration 1: an unscoped entry from before keys were namespaced. Claim
       // it into this device's slot and drop the shared copy — leaving it in
