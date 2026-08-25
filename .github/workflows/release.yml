@@ -2,8 +2,9 @@ name: Release Obsidian Plugin
 
 on:
   push:
-    # Version tags only. A bare "*" meant any tag — a scratch or backup tag —
-    # published a public release to BRAT.
+    # Version tags only, x.y.z with no "v" prefix: the community store looks up
+    # a release by the bare version from manifest.json. A bare "*" meant any tag
+    # at all — a scratch or backup tag — published a public release.
     tags:
       - "[0-9]+.[0-9]+.[0-9]+"
 
@@ -25,9 +26,10 @@ jobs:
         with:
           node-version: 24
 
-      # The release is named after the tag but BRAT reads the bundled
-      # manifest, so a mismatch ships a release whose contents disagree with
-      # its name. Fail before anything is built or published.
+      # Obsidian's community store resolves a plugin's download from the
+      # release whose tag matches the version in manifest.json on the default
+      # branch. A mismatch doesn't just look wrong — it leaves the store unable
+      # to find the release at all. Fail before anything is built or published.
       - name: Verify tag matches manifest version
         run: |
           tag="${GITHUB_REF#refs/tags/}"
