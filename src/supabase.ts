@@ -33,104 +33,74 @@ export interface AuthStorageHost {
   app?: LocalStorageHost;
 }
 
-/** localStorage key holding this machine's device id. */
+/** Vault-local storage key holding this machine's device id. */
 const DEVICE_ID_KEY = "flow-state:device-id";
 
 /**
  * The platform-only slot used before device ids existed.
  *
- * Still the scope we fall back to when we can't mint a stable device id, and
+ * Still the scope we fall back to when no device id can be established, and
  * the slot `createDataJsonAuthStorage` adopts a session from on first run.
  */
 export function platformAuthScope(): string {
   return Platform.isMobile ? "mobile" : "desktop";
 }
 
-/** A place a device id can be kept: vault-local, never synced. */
-type DeviceIdStore = {
-  read: () => string | null;
-  write: (value: string) => void;
-};
-
-/** The slice of Obsidian's `App` that holds vault-local values. */
-export type LocalStorageHost = {
-  loadLocalStorage?: (key: string) => unknown;
-  saveLocalStorage?: (key: string, data: unknown) => void;
-};
-
 /**
- * Where a device id can live, best first.
+ * The slice of Obsidian's `App` this module needs.
  *
- * `App#loadLocalStorage` is vault-specific app storage (Obsidian 1.8.7+, hence
- * the runtime check — our `minAppVersion` is older) and it survives plugin
- * updates, which the renderer's own `localStorage` isn't trusted to do. Both
- * are app-level rather than vault files, so Obsidian Sync never carries them to
- * another machine — exactly the property the scope needs.
+ * `loadLocalStorage`/`saveLocalStorage` are vault-specific app storage, added
+ * in Obsidian 1.8.7 — our `minAppVersion`. They're app-level rather than vault
+ * files, so Obsidian Sync never carries them to another machine, which is
+ * exactly the property the scope needs.
  */
-function deviceIdStores(app?: LocalStorageHost): DeviceIdStore[] {
-  const stores: DeviceIdStore[] = [];
-  const load = app?.loadLocalStorage;
-  const save = app?.saveLocalStorage;
-  if (typeof load === "function" && typeof save === "function") {
-    stores.push({
-      read: () => {
-        const value = load.call(app, DEVICE_ID_KEY);
-        return typeof value === "string" && value ? value : null;
-      },
-      write: (value) => save.call(app, DEVICE_ID_KEY, value),
-    });
-  }
-  stores.push({
-    read: () => {
-      if (typeof window === "undefined") return null;
-      return window.localStorage?.getItem(DEVICE_ID_KEY) || null;
-    },
-    write: (value) => {
-      if (typeof window === "undefined") return;
-      window.localStorage?.setItem(DEVICE_ID_KEY, value);
-    },
-  });
-  return stores;
+export type LocalStorageHost = {
+  /**
+   * Obsidian's per-install id. Undocumented — it isn't in `obsidian.d.ts` — so
+   * it's read defensively and only ever used to seed a fresh device id, never
+   * to replace one already stored.
+   */
+  appId?: string;
+  loadLocalStorage: (key: string) => unknown;
+  saveLocalStorage: (key: string, data: unknown) => void;
+};
+
+function readDeviceId(app: LocalStorageHost): string | null {
+  const value = app.loadLocalStorage(DEVICE_ID_KEY);
+  return typeof value === "string" && value ? value : null;
 }
 
 /**
- * A stable id for this machine, or null if none can be persisted.
+ * A stable id for this machine, or null if none can be established.
  *
- * A minted id is read back before it's trusted: a store that silently drops
- * writes reports null, so we fall back to the platform scope instead of handing
- * out an id that won't survive the next launch.
+ * A stored id always wins, so nothing below can move a device that already has
+ * a slot. Failing that we seed from Obsidian's install id: it survives storage
+ * being cleared, so re-deriving lands on the same slot instead of a new one and
+ * the user stays signed in. Only with no id to seed from do we mint one, and a
+ * minted id is read back before it's trusted — one that didn't persist would
+ * differ next launch and sign the user out every time, which is the bug this is
+ * fixing.
  */
 export function deviceId(app?: LocalStorageHost): string | null {
-  const stores = deviceIdStores(app);
-  for (const store of stores) {
-    try {
-      const existing = store.read();
-      if (existing) return existing;
-    } catch {
-      /* try the next store */
-    }
-  }
-  const minted = newDeviceId();
-  for (const store of stores) {
-    try {
-      store.write(minted);
-      if (store.read() === minted) return minted;
-    } catch {
-      /* storage can be unavailable or throw on write (private mode, quota) */
-    }
-  }
-  return null;
-}
-
-function newDeviceId(): string {
+  if (!app) return null;
   try {
-    if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
-      return crypto.randomUUID();
+    const stored = readDeviceId(app);
+    if (stored) return stored;
+
+    const seed = typeof app.appId === "string" && app.appId ? app.appId : null;
+    if (seed) {
+      app.saveLocalStorage(DEVICE_ID_KEY, seed);
+      return seed;
     }
+
+    const minted = crypto.randomUUID();
+    app.saveLocalStorage(DEVICE_ID_KEY, minted);
+    return readDeviceId(app) === minted ? minted : null;
   } catch {
-    /* fall through to the arithmetic id */
+    // Storage unavailable or throwing: fall back to the platform scope, which
+    // is how the plugin behaved before device ids existed.
+    return null;
   }
-  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
 /**
@@ -145,10 +115,10 @@ function newDeviceId(): string {
  *
  * Scoping by platform alone left two devices on the *same* platform (two Macs,
  * an iPhone and an iPad) sharing a slot and still fighting, so the scope also
- * carries a per-machine device id. Where no id can be persisted we degrade to
- * the platform scope rather than mint a fresh one each launch — a scope that
- * changes between launches would sign the user out every time, which is the
- * bug this is fixing.
+ * carries a per-machine device id (see `deviceId`). Where none can be
+ * established we degrade to the platform scope rather than a fresh id each
+ * launch — a scope that changes between launches would sign the user out every
+ * time, which is the bug this is fixing.
  */
 export function deviceAuthScope(app?: LocalStorageHost): string {
   const platform = platformAuthScope();

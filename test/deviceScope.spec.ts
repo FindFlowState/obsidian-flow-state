@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, afterEach } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import {
   createDataJsonAuthStorage,
   deviceAuthScope,
@@ -9,30 +9,22 @@ import {
 } from '../src/supabase';
 
 const KEY = 'sb-ref-auth-token';
+const ID_KEY = 'flow-state:device-id';
 
-/** A vault-local store standing in for one machine's Obsidian app storage. */
-function fakeApp(): LocalStorageHost & { data: Map<string, unknown> } {
+/**
+ * One machine's Obsidian app storage — vault-local, never synced. `appId` is
+ * Obsidian's per-install id; omit it to model it being unavailable.
+ */
+function fakeApp(appId?: string): LocalStorageHost & { data: Map<string, unknown> } {
   const data = new Map<string, unknown>();
   return {
     data,
+    appId,
     loadLocalStorage: (key) => data.get(key) ?? null,
     saveLocalStorage: (key, value) => {
       data.set(key, value);
     },
   };
-}
-
-function fakeWindowLocalStorage() {
-  const data = new Map<string, string>();
-  (globalThis as { window?: unknown }).window = {
-    localStorage: {
-      getItem: (key: string) => data.get(key) ?? null,
-      setItem: (key: string, value: string) => {
-        data.set(key, value);
-      },
-    },
-  };
-  return data;
 }
 
 /** One synced `data.json`, shared by every device in a test. */
@@ -48,68 +40,79 @@ function device(vault: ReturnType<typeof sharedVault>, app: LocalStorageHost) {
   return createDataJsonAuthStorage(host, deviceAuthScope(app));
 }
 
-afterEach(() => {
-  delete (globalThis as { window?: unknown }).window;
-});
-
 describe('deviceId', () => {
-  it('mints an id and returns the same one on every later call', () => {
-    const app = fakeApp();
+  it('seeds from Obsidian s install id when there is nothing stored', () => {
+    const app = fakeApp('install-abc');
+    expect(deviceId(app)).toBe('install-abc');
+    // Persisted, so a later launch reads it back directly.
+    expect(app.data.get(ID_KEY)).toBe('install-abc');
+  });
+
+  it('re-derives the same id after storage is cleared', () => {
+    const app = fakeApp('install-abc');
     const first = deviceId(app);
-    expect(first).toBeTruthy();
+    app.data.clear();
+    // The whole point of seeding: the device lands back on its own slot rather
+    // than a fresh one, so the user isn't signed out.
     expect(deviceId(app)).toBe(first);
   });
 
+  it('lets a stored id win over a changed install id', () => {
+    const app = fakeApp('install-abc');
+    deviceId(app);
+    const moved = { ...app, appId: 'install-CHANGED' };
+    // appId is undocumented, so it must never be able to move a device that
+    // already has a slot.
+    expect(deviceId(moved)).toBe('install-abc');
+  });
+
+  it('mints a random id when no install id is available', () => {
+    const app = fakeApp();
+    const id = deviceId(app);
+    expect(id).toBeTruthy();
+    expect(app.data.get(ID_KEY)).toBe(id);
+    expect(deviceId(app)).toBe(id);
+  });
+
   it('gives two machines different ids', () => {
+    expect(deviceId(fakeApp('install-a'))).not.toBe(deviceId(fakeApp('install-b')));
     expect(deviceId(fakeApp())).not.toBe(deviceId(fakeApp()));
   });
 
-  it('prefers Obsidian vault-local storage over window.localStorage', () => {
-    fakeWindowLocalStorage();
-    const app = fakeApp();
-    const id = deviceId(app);
-    expect(app.data.get('flow-state:device-id')).toBe(id);
-  });
-
-  it('falls back to window.localStorage on Obsidian older than 1.8.7', () => {
-    // loadLocalStorage/saveLocalStorage are @since 1.8.7; minAppVersion is 1.4.10.
-    const store = fakeWindowLocalStorage();
-    const id = deviceId({});
-    expect(id).toBeTruthy();
-    expect(store.get('flow-state:device-id')).toBe(id);
-  });
-
-  it('returns null when no store can persist anything', () => {
-    // No app storage, no window — nothing to write an id to.
-    expect(deviceId({})).toBeNull();
-  });
-
-  it('returns null when a store silently drops the write', () => {
+  it('returns null when a minted id silently fails to persist', () => {
     // An id we cannot read back would differ on the next launch, which would
     // sign the user out every time. Better to report none.
-    const id = deviceId({ loadLocalStorage: () => null, saveLocalStorage: () => {} });
-    expect(id).toBeNull();
+    expect(deviceId({ loadLocalStorage: () => null, saveLocalStorage: () => {} })).toBeNull();
   });
 
-  it('survives a store that throws', () => {
-    const store = fakeWindowLocalStorage();
+  it('still trusts a seeded id that fails to persist', () => {
+    // Unlike a minted id, this one is re-derivable from appId next launch.
     const id = deviceId({
+      appId: 'install-abc',
+      loadLocalStorage: () => null,
+      saveLocalStorage: () => {},
+    });
+    expect(id).toBe('install-abc');
+  });
+
+  it('returns null when storage throws, and when there is no app at all', () => {
+    const throwing: LocalStorageHost = {
       loadLocalStorage: () => {
         throw new Error('unavailable');
       },
       saveLocalStorage: () => {
         throw new Error('unavailable');
       },
-    });
-    expect(id).toBeTruthy();
-    expect(store.get('flow-state:device-id')).toBe(id);
+    };
+    expect(deviceId(throwing)).toBeNull();
+    expect(deviceId(undefined)).toBeNull();
   });
 });
 
 describe('deviceAuthScope', () => {
   it('carries the platform and this machine s id', () => {
-    const app = fakeApp();
-    expect(deviceAuthScope(app)).toBe(`${platformAuthScope()}-${deviceId(app)}`);
+    const app = fakeApp('install-abc');
+    expect(deviceAuthScope(app)).toBe(`${platformAuthScope()}-install-abc`);
   });
 
   it('is stable across calls on one machine', () => {
@@ -117,8 +120,8 @@ describe('deviceAuthScope', () => {
     expect(deviceAuthScope(app)).toBe(deviceAuthScope(app));
   });
 
-  it('degrades to the platform scope when no id can be persisted', () => {
-    expect(deviceAuthScope({})).toBe(platformAuthScope());
+  it('degrades to the platform scope when no id can be established', () => {
+    expect(deviceAuthScope(undefined)).toBe(platformAuthScope());
   });
 });
 
@@ -128,8 +131,8 @@ describe('deviceAuthScope', () => {
 describe('two same-platform devices on one synced vault', () => {
   it('keeps their sessions in separate slots', async () => {
     const vault = sharedVault();
-    const macA = device(vault, fakeApp());
-    const macB = device(vault, fakeApp());
+    const macA = device(vault, fakeApp('install-a'));
+    const macB = device(vault, fakeApp('install-b'));
 
     await macA.setItem(KEY, 'TOKEN_A');
     await macB.setItem(KEY, 'TOKEN_B');
@@ -140,8 +143,8 @@ describe('two same-platform devices on one synced vault', () => {
 
   it('survives a rotation round that used to sign one of them out', async () => {
     const vault = sharedVault();
-    const macA = device(vault, fakeApp());
-    const macB = device(vault, fakeApp());
+    const macA = device(vault, fakeApp('install-a'));
+    const macB = device(vault, fakeApp('install-b'));
     await macA.setItem(KEY, 'rt-A-1');
     await macB.setItem(KEY, 'rt-B-1');
 
@@ -158,8 +161,8 @@ describe('two same-platform devices on one synced vault', () => {
 
   it('signing out on one leaves the other signed in', async () => {
     const vault = sharedVault();
-    const macA = device(vault, fakeApp());
-    const macB = device(vault, fakeApp());
+    const macA = device(vault, fakeApp('install-a'));
+    const macB = device(vault, fakeApp('install-b'));
     await macA.setItem(KEY, 'TOKEN_A');
     await macB.setItem(KEY, 'TOKEN_B');
 
@@ -172,7 +175,7 @@ describe('two same-platform devices on one synced vault', () => {
   it('reproduces the fight when both share one slot (pre-fix behaviour)', async () => {
     // Same two devices, but scoped by platform alone as before this change.
     const vault = sharedVault();
-    const shared = (): ReturnType<typeof createDataJsonAuthStorage> =>
+    const shared = () =>
       createDataJsonAuthStorage(
         { settings: vault.settings, saveData: vault.saveData },
         platformAuthScope()
@@ -193,7 +196,7 @@ describe('upgrading from the platform-only scope', () => {
   it('a lone device adopts its old session and stays signed in', () => {
     const legacy = platformAuthScope();
     const vault = sharedVault({ [`${legacy}::${KEY}`]: 'EXISTING' });
-    const mac = device(vault, fakeApp());
+    const mac = device(vault, fakeApp('install-a'));
 
     expect(mac.getItem(KEY)).toBe('EXISTING');
     // Claimed into this device's own slot, so the next launch reads it directly.
@@ -204,8 +207,8 @@ describe('upgrading from the platform-only scope', () => {
   it('the first of two devices keeps the session, the second signs in once', async () => {
     const legacy = platformAuthScope();
     const vault = sharedVault({ [`${legacy}::${KEY}`]: 'EXISTING' });
-    const macA = device(vault, fakeApp());
-    const macB = device(vault, fakeApp());
+    const macA = device(vault, fakeApp('install-a'));
+    const macB = device(vault, fakeApp('install-b'));
 
     expect(macA.getItem(KEY)).toBe('EXISTING');
     // Mac B signs in once rather than adopting the same token and fighting.
@@ -228,16 +231,16 @@ describe('upgrading from the platform-only scope', () => {
 
   it('still adopts the unscoped entry written before any namespacing', () => {
     const vault = sharedVault({ [KEY]: 'ANCIENT' });
-    const mac = device(vault, fakeApp());
+    const mac = device(vault, fakeApp('install-a'));
     expect(mac.getItem(KEY)).toBe('ANCIENT');
     expect(vault.settings.authStore[KEY]).toBeUndefined();
   });
 
-  it('does not sign the user out when the device id cannot be persisted', () => {
+  it('does not sign the user out when no device id can be established', () => {
     // Scope collapses to the platform slot, which is where the session already is.
     const legacy = platformAuthScope();
     const vault = sharedVault({ [`${legacy}::${KEY}`]: 'EXISTING' });
-    const host: AuthStorageHost = { settings: vault.settings, saveData: vault.saveData, app: {} };
+    const host: AuthStorageHost = { settings: vault.settings, saveData: vault.saveData };
     const mac = createDataJsonAuthStorage(host, deviceAuthScope(host.app));
     expect(mac.getItem(KEY)).toBe('EXISTING');
   });
