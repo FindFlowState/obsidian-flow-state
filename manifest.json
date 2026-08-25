@@ -1,7 +1,7 @@
 {
   "id": "flow-state",
   "name": "Flowstate",
-  "version": "1.0.8",
+  "version": "1.0.9",
   "minAppVersion": "1.8.7",
   "description": "Automatically transcribe handwritten notes and voice memos & store them in your vault.",
   "author": "iamjarins",
