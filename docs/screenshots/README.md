@@ -11,15 +11,15 @@ All rendered from the real plugin code in an Obsidian-styled harness.
 
 **Onboarding — code entry step**
 
-![Code entry](2-onboarding-code-step.png)
+![Code entry](onboarding-code.png)
 
 **Settings — signed out**
 
-![Settings signed out](3-settings-signed-out.png)
+![Settings signed out](signin-settings.png)
 
 **Settings — code entry**
 
-![Settings code entry](4-settings-code-entry.png)
+![Settings code entry](signin-code.png)
 
 ## First-note a-ha
 
@@ -29,15 +29,15 @@ All rendered from the real plugin code in an Obsidian-styled harness.
 
 **Sample note in the vault — transcription + handwritten PDF**
 
-![Sample note](10-sample-note-in-vault.png)
+![Sample note](sample-note-vault.png)
 
 **Welcome preview (skip path — ephemeral view, nothing written)**
 
-![Welcome preview](8-welcome-view-ephemeral.png)
+![Welcome preview](welcome-preview.png)
 
 **First delivery notice**
 
-![First delivery notice](7-first-delivery-notice.png)
+![First delivery notice](delivery-notice.png)
 
 ## Capture
 
