@@ -31,6 +31,7 @@
     "@sentry/browser": "^10.37.0",
     "@supabase/supabase-js": "^2.108.2",
     "mustache": "^4.2.0",
+    "qrcode-generator": "^2.0.4",
     "sanitize-filename": "^1.6.3"
   }
 }

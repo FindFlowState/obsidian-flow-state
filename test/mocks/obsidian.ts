@@ -141,6 +141,22 @@ export class Plugin {
 export const Platform = { isMobile: false };
 export class Notice { constructor(_: string) {} }
 
+export class Modal {
+  app: any;
+  modalEl: HTMLElement;
+  titleEl: HTMLElement;
+  contentEl: HTMLElement;
+  constructor(app: any) {
+    this.app = app;
+    const mk = () => (typeof document !== 'undefined' ? document.createElement('div') : ({} as any));
+    this.modalEl = mk();
+    this.titleEl = mk();
+    this.contentEl = mk();
+  }
+  open() { (this as any).onOpen?.(); }
+  close() { (this as any).onClose?.(); }
+}
+
 export function normalizePath(path: string): string {
   return path.replace(/\\/g, '/').replace(/\/+/g, '/').replace(/\/$/, '');
 }

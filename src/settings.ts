@@ -1,8 +1,10 @@
 import { App, PluginSettingTab, Setting, Notice, ButtonComponent } from "obsidian";
 import type FlowStatePlugin from "./main";
 import type { Route } from "./types";
-import { DEFAULT_SUPABASE_URL, DEFAULT_SUPABASE_ANON_KEY } from "./config";
-import { getSupabase, getCurrentSession, signOut as supaSignOut, sendMagicLink, listObsidianRoutes, deleteRoute, fetchRouteById, fetchUserCredits } from "./supabase";
+import { DEFAULT_SUPABASE_URL, DEFAULT_SUPABASE_ANON_KEY, DEFAULT_INGEST_EMAIL_DOMAIN } from "./config";
+import { getSupabase, getCurrentSession, signOut as supaSignOut, sendMagicLink, verifyEmailOtp, fetchUserHandle, listObsidianRoutes, deleteRoute, fetchRouteById, fetchUserCredits } from "./supabase";
+import { computeFlowEmail } from "./email";
+import qrcode from "qrcode-generator";
 import { renderRouteEditor } from "./routeEditor";
 import { errorMessage } from "./logger";
 import { confirmModal } from "./confirmModal";
@@ -18,6 +20,10 @@ export type PluginSettings = {
   // plugin updates/reloads (Obsidian doesn't reliably persist localStorage,
   // especially on mobile). Backs the custom auth storage adapter in supabase.ts.
   authStore?: Record<string, string>;
+  // First-run onboarding modal was shown (or dismissed) once already
+  onboardingDismissed?: boolean;
+  // Account ids that already went through first-sign-in starter setup
+  starterSetupUsers?: string[];
 };
 
 export const DEFAULT_SETTINGS: PluginSettings = {
@@ -25,12 +31,16 @@ export const DEFAULT_SETTINGS: PluginSettings = {
   supabaseAnonKey: "",
   routes: {},
   lastUserId: "",
-  authStore: {}
+  authStore: {},
+  onboardingDismissed: false,
+  starterSetupUsers: []
 };
 
 export class FlowStateSettingTab extends PluginSettingTab {
   // undefined -> list view; null -> new project; Route -> edit existing
   private editingRoute: Route | null | undefined = undefined;
+  // Email we sent a sign-in code to; non-null renders the "enter code" state
+  private pendingOtpEmail: string | null = null;
   // Deferred project ID for deep link navigation
   private deferredProjectId: string | null = null;
   // Generation counter to cancel stale async renders
@@ -125,13 +135,14 @@ export class FlowStateSettingTab extends PluginSettingTab {
       bulletList.createEl("li", { text: bullet });
     }
 
-    // Unified connect section: email + connect/logout button
-    // Place both rows inside a fixed wrapper so async rendering preserves order
+    // Unified connect section: email/code entry when signed out, account row
+    // when signed in. Placed inside a fixed wrapper so async rendering
+    // preserves order.
     let emailValue = "";
     const authSection = containerEl.createDiv();
     const connectSetting = new Setting(authSection)
-      .setName("Sign Up / Sign In");
-    connectSetting.setDesc("Enter your email to get started");
+      .setName("Sign up or sign in");
+    connectSetting.setDesc("Enter your email and we'll send you a sign-in code. New accounts start with 50 free credits.");
 
     void (async () => {
       try {
@@ -147,51 +158,28 @@ export class FlowStateSettingTab extends PluginSettingTab {
           await this.plugin.saveData(this.settings);
         }
 
-        // Update UI based on sign-in state
         if (isSignedIn) {
           const signedInEmail = session?.user?.email ?? "";
-          emailValue = signedInEmail;
+          this.pendingOtpEmail = null;
           // Hide onboarding bullets when signed in
           bulletsSection.addClass("fs-hidden");
           // Show prominent connected status
           connectSetting.setName("Account");
           connectSetting.setDesc("");
-          // Add status indicator
           const statusEl = connectSetting.descEl.createDiv({ cls: "fs-status-row" });
           statusEl.createSpan({ cls: "fs-status-dot" });
           statusEl.createSpan({ text: `Connected as ${signedInEmail}`, cls: "fs-muted-text" });
-        } else {
-          // Create email field for sign-in
-          connectSetting.addText((t) => {
-            t.setPlaceholder("you@example.com");
-            t.onChange((v) => { emailValue = v.trim(); });
-            // Allow Enter key to submit
-            t.inputEl.addEventListener("keydown", (e) => {
-              if (e.key === "Enter") {
-                e.preventDefault();
-                void submitAuth();
-              }
-            });
-          });
-        }
 
-        // Shared auth submit handler
-        const submitAuth = async () => {
-          try {
-            const url = DEFAULT_SUPABASE_URL;
-            const key = DEFAULT_SUPABASE_ANON_KEY;
-            if (!url || !key) {
-              new Notice("Supabase config missing. Rebuild plugin with env set.");
-              return;
-            }
-            if (isSignedIn) {
-              // Confirm before logging out
+          const logoutBtn = new ButtonComponent(connectSetting.controlEl.createDiv());
+          logoutBtn.setButtonText("Log out");
+          logoutBtn.onClick(async () => {
+            try {
               const confirmLogout = await confirmModal(this.app, {
-              title: "Log out",
-              message: "Are you sure you want to log out of Flowstate?",
-              cta: "Log out",
-              warning: true,
-            });
+                title: "Log out",
+                message: "Are you sure you want to log out of Flowstate?",
+                cta: "Log out",
+                warning: true,
+              });
               if (!confirmLogout) return;
               await supaSignOut(supabase);
               // Clear cached routes, user id, and vault connection on logout so we
@@ -202,26 +190,103 @@ export class FlowStateSettingTab extends PluginSettingTab {
               await this.plugin.saveData(this.settings);
               new Notice("Signed out");
               this.display();
-              return;
+            } catch (e: unknown) {
+              console.error(e);
+              new Notice(`Sign-out failed: ${errorMessage(e)}`);
             }
-            // Magic Link flow requires an email
-            if (!emailValue) {
-              new Notice("Enter your email to receive a Magic Link");
-              return;
-            }
-            const redirectTo = "obsidian://flow-state";
-            await sendMagicLink(supabase, emailValue, redirectTo);
-            new Notice(`Magic link sent to ${emailValue}`);
-          } catch (e: unknown) {
-            console.error(e);
-            new Notice(`${isSignedIn ? "Sign-out" : "Magic link"} failed: ${errorMessage(e)}`);
+          });
+          return;
+        }
+
+        // ---- Signed out ----
+        const configOk = () => {
+          if (!DEFAULT_SUPABASE_URL || !DEFAULT_SUPABASE_ANON_KEY) {
+            new Notice("Supabase config missing. Rebuild plugin with env set.");
+            return false;
           }
+          return true;
         };
 
-        const actionRow = connectSetting.controlEl.createDiv();
-        const btn = new ButtonComponent(actionRow);
-        btn.setButtonText(isSignedIn ? "Log out" : "Connect");
-        btn.onClick(submitAuth);
+        if (this.pendingOtpEmail) {
+          // Code-entry state: a sign-in code was emailed; verify it here. The
+          // magic link in the same email still works via the deep-link handler.
+          const pendingEmail = this.pendingOtpEmail;
+          connectSetting.setName("Enter your code");
+          connectSetting.setDesc(`We emailed a sign-in code to ${pendingEmail}. Type it here — or click the link in that email on this device.`);
+
+          let codeValue = "";
+          const verify = async () => {
+            if (!codeValue) {
+              new Notice("Enter the code from your email");
+              return;
+            }
+            try {
+              await verifyEmailOtp(supabase, pendingEmail, codeValue);
+              this.pendingOtpEmail = null;
+              new Notice("You're in. Welcome to Flowstate!");
+              await this.plugin.handleSignedIn();
+            } catch (e: unknown) {
+              console.error(e);
+              new Notice(`That code didn't work: ${errorMessage(e)}`);
+            }
+          };
+
+          connectSetting.addText((t) => {
+            t.setPlaceholder("6-digit code");
+            t.onChange((v) => { codeValue = v.trim(); });
+            t.inputEl.inputMode = "numeric";
+            t.inputEl.addEventListener("keydown", (e) => {
+              if (e.key === "Enter") { e.preventDefault(); void verify(); }
+            });
+          });
+          connectSetting.addButton((b) => b.setCta().setButtonText("Sign in").onClick(() => void verify()));
+
+          const links = authSection.createDiv({ cls: "fs-auth-links" });
+          const resend = links.createEl("a", { text: "Resend code", cls: "fs-muted-link" });
+          resend.addEventListener("click", (e) => {
+            e.preventDefault();
+            void (async () => {
+              try {
+                await sendMagicLink(supabase, pendingEmail, "obsidian://flow-state");
+                new Notice(`Code re-sent to ${pendingEmail}`);
+              } catch (err: unknown) {
+                new Notice(`Couldn't resend: ${errorMessage(err)}`);
+              }
+            })();
+          });
+          const change = links.createEl("a", { text: "Use a different email", cls: "fs-muted-link" });
+          change.addEventListener("click", (e) => {
+            e.preventDefault();
+            this.pendingOtpEmail = null;
+            this.display();
+          });
+          return;
+        }
+
+        // Email-entry state
+        const sendCode = async () => {
+          if (!configOk()) return;
+          if (!emailValue || !emailValue.includes("@")) {
+            new Notice("Enter your email address first");
+            return;
+          }
+          try {
+            await sendMagicLink(supabase, emailValue, "obsidian://flow-state");
+            this.pendingOtpEmail = emailValue;
+            this.display();
+          } catch (e: unknown) {
+            console.error(e);
+            new Notice(`Couldn't send the code: ${errorMessage(e)}`);
+          }
+        };
+        connectSetting.addText((t) => {
+          t.setPlaceholder("you@example.com");
+          t.onChange((v) => { emailValue = v.trim(); });
+          t.inputEl.addEventListener("keydown", (e) => {
+            if (e.key === "Enter") { e.preventDefault(); void sendCode(); }
+          });
+        });
+        connectSetting.addButton((b) => b.setCta().setButtonText("Send code").onClick(() => void sendCode()));
       } catch (e) {
         // Surface minimal info but keep UI rendering
         console.error(e);
@@ -257,6 +322,79 @@ export class FlowStateSettingTab extends PluginSettingTab {
           );
           return;
         }
+
+        // Capture section — how notes get INTO Flowstate (the part that
+        // happens outside Obsidian). Collapsible, open by default.
+        containerEl.createDiv({ cls: "fs-divider" });
+        const captureSection = containerEl.createDiv({ cls: "fs-capture-section" });
+        const captureHeaderRow = captureSection.createDiv({ cls: "fs-section-header-row" });
+        const captureArrow = captureHeaderRow.createSpan({ text: "▾", cls: "fs-section-arrow" });
+        captureHeaderRow.createEl("div", { text: "Capture", cls: "fs-section-title" });
+        const captureBody = captureSection.createDiv();
+        let captureOpen = true;
+        const updateCaptureVisibility = () => {
+          captureBody.toggleClass("fs-hidden", !captureOpen);
+          captureArrow.textContent = captureOpen ? "▾" : "▸";
+        };
+        captureHeaderRow.addEventListener("click", () => {
+          captureOpen = !captureOpen;
+          updateCaptureVisibility();
+        });
+        updateCaptureVisibility();
+
+        const captureIntro = captureBody.createDiv({ cls: "setting-item-description fs-capture-intro" });
+        captureIntro.setText("Capturing happens outside Obsidian — from your phone or by email. Transcriptions land back here on their own.");
+
+        // Mobile app row with a QR code for grabbing the app from desktop
+        const appSetting = new Setting(captureBody)
+          .setName("Flowstate app")
+          .setDesc("Snap handwritten pages or record voice memos, then send them straight to this vault.");
+        appSetting.settingEl.addClass("fs-setting-flush");
+        const qrHost = appSetting.controlEl.createDiv({ cls: "fs-qr-box" });
+        try {
+          const qr = qrcode(0, "M");
+          qr.addData("https://seekflowstate.com");
+          qr.make();
+          qrHost.createEl("img", {
+            attr: { src: qr.createDataURL(3, 6), alt: "QR code for seekflowstate.com" },
+            cls: "fs-qr-img",
+          });
+          qrHost.createDiv({ text: "Scan to download", cls: "fs-qr-caption" });
+        } catch { /* QR is a nicety; skip on failure */ }
+        appSetting.addButton((b) =>
+          b.setButtonText("Get the app").onClick(() => {
+            window.open("https://seekflowstate.com", "_blank");
+          })
+        );
+
+        // Email row; the address resolves after flows load further down
+        const captureEmailSetting = new Setting(captureBody)
+          .setName("Email your pages")
+          .setDesc("");
+        captureEmailSetting.settingEl.addClass("fs-setting-flush");
+        const captureEmailControl = captureEmailSetting.controlEl.createDiv();
+        const setCaptureEmail = (addr: string | null) => {
+          captureEmailSetting.descEl.empty();
+          captureEmailControl.empty();
+          if (addr) {
+            captureEmailSetting.setDesc("Send pages from your e-ink tablet — or anything with an outbox — straight to your first flow:");
+            const addrRow = captureEmailSetting.descEl.createDiv({ cls: "fs-capture-email" });
+            addrRow.createEl("code", { text: addr });
+            const copyBtn = new ButtonComponent(captureEmailControl);
+            copyBtn.setButtonText("Copy");
+            copyBtn.onClick(async () => {
+              try {
+                await navigator.clipboard.writeText(addr);
+                new Notice("Email address copied");
+              } catch (err: unknown) {
+                new Notice(errorMessage(err));
+              }
+            });
+          } else {
+            captureEmailSetting.setDesc("Save a flow below to get its unique email address. Each flow has its own.");
+          }
+        };
+        setCaptureEmail(null);
 
         // Projects section (collapsible, open by default)
         containerEl.createDiv({ cls: "fs-divider" });
@@ -414,6 +552,16 @@ export class FlowStateSettingTab extends PluginSettingTab {
         // Bail out if a newer display() was called
         if (this.displayGeneration !== generation) return;
         renderRows(valid);
+
+        // Fill in the capture email now that flows are known
+        try {
+          const firstSlug = valid.find((r) => r.slug)?.slug ?? null;
+          const handle = firstSlug ? await fetchUserHandle(supabase) : null;
+          if (this.displayGeneration !== generation) return;
+          setCaptureEmail(computeFlowEmail(handle, firstSlug, DEFAULT_INGEST_EMAIL_DOMAIN));
+        } catch {
+          setCaptureEmail(null);
+        }
 
         // Credits section (collapsible, collapsed by default)
         containerEl.createDiv({ cls: "fs-divider" });

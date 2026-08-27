@@ -79,7 +79,7 @@ Need more credits? Click **Manage Credits** to upgrade your plan or buy top-ups.
 | Issue | Solution |
 |-------|----------|
 | **Flow email address not showing** | Email options only appear after a flow is saved. Create the flow first, then edit it to see email options. |
-| **Magic link not working** | Check your spam folder. Make sure you click the link on the same device where Obsidian is open. |
+| **Magic link not working** | Use the 6-digit code from the same email instead — type it into the sign-in box in Obsidian. If you use the link, click it on the same device where Obsidian is open. |
 | **Notes not syncing** | Wait a minute for the automatic background sync, or trigger it manually from the command palette ("Flowstate: Sync Now"). |
 | **"Not signed in" error** | Go to Settings → Flowstate and reconnect your account. |
 | **Destination folder not found** | The plugin auto-creates folders, but make sure the path is valid. Edit your flow and re-select the destination. |

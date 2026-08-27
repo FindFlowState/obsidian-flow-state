@@ -42,3 +42,40 @@
 .fs-credit-row { border-top: none; padding: 6px 0; }
 .fs-credits-badge { font-size: 0.85em; color: var(--text-muted); margin-left: 8px; }
 .fs-badge-accent { color: var(--interactive-accent); }
+
+/* ---- Auth (code sign-in) ---- */
+.fs-auth-links { display: flex; gap: 16px; font-size: 0.85em; margin-top: 2px; }
+
+/* ---- Capture section ---- */
+.fs-capture-intro { margin-bottom: 10px; }
+.fs-capture-email { margin-top: 6px; }
+.fs-capture-email code { font-size: 0.95em; user-select: all; }
+.fs-qr-box { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.fs-qr-img { width: 84px; height: 84px; border-radius: 4px; }
+.fs-qr-caption { font-size: 0.7em; color: var(--text-muted); }
+
+/* ---- Onboarding modal ---- */
+.fs-ob-modal { max-width: 480px; }
+.fs-ob-tagline { color: var(--text-muted); margin: 0 0 16px 0; }
+.fs-ob-steps { display: flex; flex-direction: column; gap: 12px; margin-bottom: 16px; }
+.fs-ob-step { display: flex; gap: 12px; align-items: flex-start; }
+.fs-ob-step-num {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--interactive-accent);
+  color: var(--text-on-accent);
+  font-size: 0.85em;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.fs-ob-step-title { font-weight: 600; }
+.fs-ob-step-body { font-size: 0.9em; color: var(--text-muted); }
+.fs-ob-credits { font-size: 0.9em; font-weight: 500; margin: 0 0 16px 0; }
+.fs-ob-email-row { display: flex; gap: 8px; }
+.fs-ob-email-row input { flex: 1; }
+.fs-ob-links { display: flex; gap: 16px; font-size: 0.85em; margin-top: 12px; }
+.fs-ob-later { text-align: center; margin-top: 14px; font-size: 0.85em; }
