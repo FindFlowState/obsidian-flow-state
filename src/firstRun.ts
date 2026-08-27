@@ -1,20 +1,19 @@
-import { normalizePath } from "obsidian";
 import type FlowStatePlugin from "./main";
 import type { Route } from "./types";
 import { getSupabase, listObsidianRoutes, createProject, fetchUserHandle } from "./supabase";
 import { DEFAULT_INGEST_EMAIL_DOMAIN } from "./config";
 import { computeFlowEmail } from "./email";
-import { ensureFolder, atomicWrite } from "./fs";
+import { WELCOME_VIEW_TYPE } from "./welcomeView";
 import { log, warn } from "./logger";
 
 export const STARTER_FLOW_NAME = "Inbox";
 export const STARTER_FOLDER = "Flowstate";
-export const WELCOME_NOTE_NAME = "Welcome to Flowstate.md";
 
 /**
- * The sample note delivered right after first sign-in, formatted the way a
+ * The welcome screen shown right after first sign-in, formatted the way a
  * real transcription lands so the user sees the end state before they've
- * captured anything.
+ * captured anything. Rendered in an ephemeral view (see welcomeView.ts) —
+ * it is never written to the vault.
  *
  * ⚠️ User-facing copy — follow the Flowstate voice guides before editing.
  */
@@ -24,23 +23,25 @@ export function welcomeNoteContent(flowEmail: string | null): string {
     : "";
   return `# Welcome to Flowstate
 
-This note arrived the same way your handwriting will: dropped into your vault as clean, searchable text, filed exactly where you told it to go.
+Your handwriting and voice memos will land in your vault looking a lot like this: clean, searchable text, filed exactly where you told it to go.
 
 Here's the whole trick:
 
 1. **Write on paper.** Or an e-ink tablet. Or think out loud into a voice memo.
 2. **Capture it.** Snap it with the [Flowstate app](https://seekflowstate.com), or email it straight from your reMarkable, Boox, or Supernote.
-3. **It lands here.** Transcribed, formatted, and filed by your flows. The words stay yours — Flowstate just does the typing.
+3. **It lands in your vault.** Transcribed, formatted, and filed by your flows. The words stay yours — Flowstate just does the typing.
 
-We already made you a flow called **Inbox** that saves to this \`${STARTER_FOLDER}\` folder. Point it somewhere else, rename it, or add more flows any time in **Settings → Flowstate**.
+We already made you a flow called **Inbox** that saves to a \`${STARTER_FOLDER}\` folder. Point it somewhere else, rename it, or add more flows any time in **Settings → Flowstate**.
 
 ## Try it now
 
 ${emailLine}- Or grab the [Flowstate app](https://seekflowstate.com) and snap a photo of anything handwritten within arm's reach.
 
-A minute later, it shows up next to this note.
+A minute later, it lands in your \`${STARTER_FOLDER}\` folder as a real note.
 
 You have 50 free credits to play with — one page of handwriting or one minute of audio each. Go scribble something.
+
+*This screen is just a preview — Flowstate won't write anything to your vault until you send it something.*
 
 — Raj and Rob
 `;
@@ -66,14 +67,16 @@ export function deliveryNoticeText(count: number): string {
  * One-time setup after a user's first sign-in from this vault:
  *  - if the account has no flows for this vault, create a starter "Inbox"
  *    flow saving into the "Flowstate" folder
- *  - write a sample welcome note into that folder and open it, so the first
- *    minute in the plugin ends with a real note in the vault
+ *  - open the welcome screen (an ephemeral view, NOT a vault file) showing
+ *    what a delivered note will look like and how to send the first one
  *
- * Runs at most once per account (tracked in settings.starterSetupUsers) and
- * never for accounts that already have flows here. Best-effort: any failure
- * logs and returns false rather than interrupting sign-in.
+ * Nothing is written to the vault here; the first real write happens when a
+ * transcription is delivered. Runs at most once per account (tracked in
+ * settings.starterSetupUsers) and never for accounts that already have flows
+ * here. Best-effort: any failure logs and returns false rather than
+ * interrupting sign-in.
  *
- * Returns true when the welcome note was delivered (i.e. this was a genuinely
+ * Returns true when the welcome screen was opened (i.e. this was a genuinely
  * fresh account for this vault).
  */
 export async function runFirstSignInSetup(plugin: FlowStatePlugin): Promise<boolean> {
@@ -119,16 +122,15 @@ export async function runFirstSignInSetup(plugin: FlowStatePlugin): Promise<bool
       const handle = await fetchUserHandle(supabase);
       flowEmail = computeFlowEmail(handle, route?.slug, DEFAULT_INGEST_EMAIL_DOMAIN);
     } catch (e) {
-      warn("firstRun: could not resolve flow email for welcome note", e);
+      warn("firstRun: could not resolve flow email for welcome screen", e);
     }
 
-    const notePath = normalizePath(`${STARTER_FOLDER}/${WELCOME_NOTE_NAME}`);
-    if (!(await plugin.app.vault.adapter.exists(notePath))) {
-      await ensureFolder(plugin.app, STARTER_FOLDER);
-      await atomicWrite(plugin.app, notePath, welcomeNoteContent(flowEmail));
-      log("firstRun: welcome note written", { notePath });
-    }
-    await plugin.app.workspace.openLinkText(notePath, "", false);
+    // Open the welcome screen as a view in a new tab — deliberately not a
+    // vault file: we never write to the user's vault until a transcription
+    // actually arrives.
+    const leaf = plugin.app.workspace.getLeaf(true);
+    await leaf.setViewState({ type: WELCOME_VIEW_TYPE, active: true, state: { flowEmail } });
+    log("firstRun: welcome screen opened", { flowEmail: !!flowEmail });
     return true;
   } catch (e) {
     warn("firstRun: setup failed (continuing without it)", e);

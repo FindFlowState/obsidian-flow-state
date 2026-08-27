@@ -134,6 +134,9 @@ export class Plugin {
   constructor() { this.app = { vault: new Vault() }; }
   addStatusBarItem() { return { setText(_: string) {} }; }
   addCommand(_: any) {}
+  addSettingTab(_: any) {}
+  registerView(_: any, __: any) {}
+  registerEvent(_: any) {}
   registerDomEvent(_: any, __: any, ___: any) {}
   registerObsidianProtocolHandler(_: any, __: any) {}
 }
@@ -145,6 +148,24 @@ export class Notice {
     Notice.shown.push(String(message));
   }
 }
+
+export class WorkspaceLeaf {
+  viewState: any = null;
+  async setViewState(state: any) { this.viewState = state; }
+}
+
+export class ItemView {
+  leaf: any;
+  app: any = {};
+  contentEl: HTMLElement = (typeof document !== 'undefined' ? document.createElement('div') : ({} as any));
+  constructor(leaf: any) { this.leaf = leaf; }
+  async setState(_state: any, _result: any) {}
+  getState(): any { return {}; }
+}
+
+export const MarkdownRenderer = {
+  render: async (_app: any, _md: string, _el: HTMLElement, _path: string, _cmp: any) => {},
+};
 
 export class Modal {
   app: any;

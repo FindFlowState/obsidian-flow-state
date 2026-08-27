@@ -9,6 +9,7 @@ import { log, warn, error, errorMessage } from "./logger";
 import { initSentry, captureException } from "./sentry";
 import { OnboardingModal } from "./onboarding";
 import { runFirstSignInSetup, firstDeliveryNoticeText, deliveryNoticeText } from "./firstRun";
+import { WelcomeView, WELCOME_VIEW_TYPE } from "./welcomeView";
 
 // Minimal shape of Obsidian's undocumented settings API used for deep links.
 type ObsidianSettingApi = { open(): Promise<void>; openTabById(id: string): void };
@@ -55,6 +56,10 @@ export default class FlowStatePlugin extends Plugin {
       await this.saveSettings();
     });
     this.addSettingTab(this.settingsTab);
+
+    // Welcome screen view (ephemeral — shows what a delivered note looks like
+    // without writing anything to the vault)
+    this.registerView(WELCOME_VIEW_TYPE, (leaf) => new WelcomeView(leaf));
 
     // Commands
     this.addCommand({

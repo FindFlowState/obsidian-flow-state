@@ -26,13 +26,16 @@ vi.mock('../src/supabase', () => ({
   fetchUserHandle: async () => 'raj',
 }));
 
-import { runFirstSignInSetup, welcomeNoteContent, STARTER_FOLDER, WELCOME_NOTE_NAME } from '../src/firstRun';
+import { runFirstSignInSetup, welcomeNoteContent, STARTER_FOLDER } from '../src/firstRun';
+import { WELCOME_VIEW_TYPE } from '../src/welcomeView';
 import { Plugin } from './mocks/obsidian';
 
 function makePlugin() {
   const plugin: any = new Plugin();
   plugin.settings = { routes: {}, starterSetupUsers: [] };
-  plugin.app.workspace = { openLinkText: vi.fn(async () => {}) };
+  const leaf = { setViewState: vi.fn(async () => {}) };
+  plugin.app.workspace = { getLeaf: vi.fn(() => leaf) };
+  plugin.__leaf = leaf;
   plugin.getMyConnectionId = async () => 'conn-1';
   plugin.saveSettings = vi.fn(async () => {});
   return plugin;
@@ -45,7 +48,7 @@ beforeEach(() => {
 });
 
 describe('runFirstSignInSetup', () => {
-  it('creates a starter flow, writes and opens the welcome note for a fresh account', async () => {
+  it('creates a starter flow and opens the welcome view for a fresh account — without touching the vault', async () => {
     const plugin = makePlugin();
     const delivered = await runFirstSignInSetup(plugin);
 
@@ -56,12 +59,14 @@ describe('runFirstSignInSetup', () => {
     expect(plugin.settings.routes['route-new']).toBeTruthy();
     expect(plugin.settings.starterSetupUsers).toContain('user-1');
 
-    const notePath = `${STARTER_FOLDER}/${WELCOME_NOTE_NAME}`;
-    const note = plugin.app.vault.adapter.fs.get(notePath);
-    expect(note?.type).toBe('file');
-    expect(note?.content).toContain('# Welcome to Flowstate');
-    expect(note?.content).toContain('raj.inbox@'); // flow email made it into the copy
-    expect(plugin.app.workspace.openLinkText).toHaveBeenCalledWith(notePath, '', false);
+    // Welcome screen opens as an ephemeral view, with the flow email in state
+    expect(plugin.__leaf.setViewState).toHaveBeenCalledWith({
+      type: WELCOME_VIEW_TYPE,
+      active: true,
+      state: { flowEmail: 'raj.inbox@in.example.com' },
+    });
+    // Nothing was written to the vault
+    expect(plugin.app.vault.adapter.fs.size).toBe(0);
   });
 
   it('does nothing for an account that already has flows in this vault', async () => {
@@ -83,7 +88,7 @@ describe('runFirstSignInSetup', () => {
 
     expect(delivered).toBe(false);
     expect(created).toHaveLength(0);
-    expect(plugin.app.workspace.openLinkText).not.toHaveBeenCalled();
+    expect(plugin.__leaf.setViewState).not.toHaveBeenCalled();
   });
 
   it('is a no-op when not signed in', async () => {
