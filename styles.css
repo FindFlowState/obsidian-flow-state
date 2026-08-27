@@ -58,6 +58,36 @@
 .fs-welcome-view { padding: 32px 24px; overflow-y: auto; }
 .fs-welcome-inner { max-width: 700px; margin: 0 auto; font-size: 1.05em; line-height: 1.6; }
 
+/* ---- Sample note modal ---- */
+.fs-sample-fineprint { font-size: 0.85em; color: var(--text-muted); margin: 0 0 16px 0; }
+.fs-sample-buttons { display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px; }
+
+/* ---- Get the app modal ---- */
+.fs-getapp-modal { max-width: 420px; }
+.fs-getapp-qr { display: flex; flex-direction: column; align-items: center; gap: 6px; margin: 8px 0 16px 0; }
+.fs-getapp-qr-img { width: 168px; height: 168px; border-radius: 8px; }
+.fs-getapp-links p { margin: 6px 0; font-size: 0.95em; }
+
+/* ---- Upload modal ---- */
+.fs-upload-modal { max-width: 560px; }
+.fs-upload-list { margin: 4px 0 4px 0; display: flex; flex-direction: column; gap: 6px; }
+.fs-upload-row {
+  display: flex; align-items: center; gap: 10px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px; padding: 8px 12px;
+}
+.fs-upload-icon { font-size: 1.1em; }
+.fs-upload-info { flex: 1; min-width: 0; }
+.fs-upload-name { font-size: 0.95em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fs-upload-meta { font-size: 0.8em; color: var(--text-muted); }
+.fs-upload-remove { font-size: 0.85em; flex-shrink: 0; }
+.fs-upload-newflow { border-top: none; padding-top: 4px; }
+.fs-upload-instructions textarea { min-width: 260px; }
+.fs-upload-footer { margin-top: 14px; }
+.fs-upload-summary { margin-bottom: 4px; }
+.fs-upload-estimate { font-weight: 600; font-size: 0.95em; }
+.fs-upload-fineprint { font-size: 0.78em; color: var(--text-muted); margin-top: 2px; }
+
 /* ---- Onboarding modal ---- */
 .fs-ob-modal { max-width: 480px; }
 .fs-ob-tagline { color: var(--text-muted); margin: 0 0 16px 0; }

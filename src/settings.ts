@@ -1,10 +1,10 @@
 import { App, PluginSettingTab, Setting, Notice, ButtonComponent } from "obsidian";
 import type FlowStatePlugin from "./main";
 import type { Route } from "./types";
-import { DEFAULT_SUPABASE_URL, DEFAULT_SUPABASE_ANON_KEY, DEFAULT_INGEST_EMAIL_DOMAIN } from "./config";
-import { getSupabase, getCurrentSession, signOut as supaSignOut, sendMagicLink, verifyEmailOtp, fetchUserHandle, listObsidianRoutes, deleteRoute, fetchRouteById, fetchUserCredits } from "./supabase";
-import { computeFlowEmail } from "./email";
-import qrcode from "qrcode-generator";
+import { DEFAULT_SUPABASE_URL, DEFAULT_SUPABASE_ANON_KEY } from "./config";
+import { getSupabase, getCurrentSession, signOut as supaSignOut, sendMagicLink, verifyEmailOtp, listObsidianRoutes, deleteRoute, fetchRouteById, fetchUserCredits } from "./supabase";
+import { GetAppModal } from "./getAppModal";
+import { openUploadModal } from "./uploadModal";
 import { renderRouteEditor } from "./routeEditor";
 import { errorMessage } from "./logger";
 import { confirmModal } from "./confirmModal";
@@ -346,58 +346,29 @@ export class FlowStateSettingTab extends PluginSettingTab {
         updateCaptureVisibility();
 
         const captureIntro = captureBody.createDiv({ cls: "setting-item-description fs-capture-intro" });
-        captureIntro.setText("Capturing happens outside Obsidian — from your phone or by email. Transcriptions land back here on their own.");
+        captureIntro.setText("Capture from your phone, by email (each flow has its own address — see its Email Options), or upload right here. Transcriptions land back in this vault on their own.");
 
-        // Mobile app row with a QR code for grabbing the app from desktop
+        // Mobile app row — QR + links live in a modal behind the button
         const appSetting = new Setting(captureBody)
           .setName("Flowstate app")
           .setDesc("Snap handwritten pages or record voice memos, then send them straight to this vault.");
         appSetting.settingEl.addClass("fs-setting-flush");
-        const qrHost = appSetting.controlEl.createDiv({ cls: "fs-qr-box" });
-        try {
-          const qr = qrcode(0, "M");
-          qr.addData("https://seekflowstate.com");
-          qr.make();
-          qrHost.createEl("img", {
-            attr: { src: qr.createDataURL(3, 6), alt: "QR code for seekflowstate.com" },
-            cls: "fs-qr-img",
-          });
-          qrHost.createDiv({ text: "Scan to download", cls: "fs-qr-caption" });
-        } catch { /* QR is a nicety; skip on failure */ }
         appSetting.addButton((b) =>
           b.setButtonText("Get the app").onClick(() => {
-            window.open("https://seekflowstate.com", "_blank");
+            new GetAppModal(this.app).open();
           })
         );
 
-        // Email row; the address resolves after flows load further down
-        const captureEmailSetting = new Setting(captureBody)
-          .setName("Email your pages")
-          .setDesc("");
-        captureEmailSetting.settingEl.addClass("fs-setting-flush");
-        const captureEmailControl = captureEmailSetting.controlEl.createDiv();
-        const setCaptureEmail = (addr: string | null) => {
-          captureEmailSetting.descEl.empty();
-          captureEmailControl.empty();
-          if (addr) {
-            captureEmailSetting.setDesc("Send pages from your e-ink tablet — or anything with an outbox — straight to your first flow:");
-            const addrRow = captureEmailSetting.descEl.createDiv({ cls: "fs-capture-email" });
-            addrRow.createEl("code", { text: addr });
-            const copyBtn = new ButtonComponent(captureEmailControl);
-            copyBtn.setButtonText("Copy");
-            copyBtn.onClick(async () => {
-              try {
-                await navigator.clipboard.writeText(addr);
-                new Notice("Email address copied");
-              } catch (err: unknown) {
-                new Notice(errorMessage(err));
-              }
-            });
-          } else {
-            captureEmailSetting.setDesc("Save a flow below to get its unique email address. Each flow has its own.");
-          }
-        };
-        setCaptureEmail(null);
+        // Upload row — capture directly from Obsidian
+        const uploadSetting = new Setting(captureBody)
+          .setName("Upload a file")
+          .setDesc("Send handwriting or audio from this computer: images, PDFs, and audio files.");
+        uploadSetting.settingEl.addClass("fs-setting-flush");
+        uploadSetting.addButton((b) =>
+          b.setCta().setButtonText("Upload").onClick(() => {
+            openUploadModal(this.app, this.plugin);
+          })
+        );
 
         // Projects section (collapsible, open by default)
         containerEl.createDiv({ cls: "fs-divider" });
@@ -555,16 +526,6 @@ export class FlowStateSettingTab extends PluginSettingTab {
         // Bail out if a newer display() was called
         if (this.displayGeneration !== generation) return;
         renderRows(valid);
-
-        // Fill in the capture email now that flows are known
-        try {
-          const firstSlug = valid.find((r) => r.slug)?.slug ?? null;
-          const handle = firstSlug ? await fetchUserHandle(supabase) : null;
-          if (this.displayGeneration !== generation) return;
-          setCaptureEmail(computeFlowEmail(handle, firstSlug, DEFAULT_INGEST_EMAIL_DOMAIN));
-        } catch {
-          setCaptureEmail(null);
-        }
 
         // Credits section (collapsible, collapsed by default)
         containerEl.createDiv({ cls: "fs-divider" });

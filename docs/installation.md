@@ -52,4 +52,4 @@ The first time the plugin loads, it opens a short welcome screen — enter your 
 2. Check your email for a 6-digit sign-in code and type it into Obsidian (check spam if needed)
 3. Prefer links? The same email contains a magic link — click it on the device where Obsidian is open
 
-If you don't have a Flowstate account, one will be created automatically. After you sign in, Flowstate creates a starter **Inbox** flow (saving to a `Flowstate` folder) and opens a short welcome screen showing what transcriptions will look like. The welcome screen is just a preview — nothing is written to your vault until your first transcription arrives.
+If you don't have a Flowstate account, one will be created automatically. After you sign in, Flowstate creates a starter **Inbox** flow (saving to a `Flowstate` folder) and offers you a **sample note**: say yes and the transcribed welcome letter — with the handwritten original PDF attached — is added to your `Flowstate` folder so you can see exactly what a delivery looks like. Skip it and you get a preview screen instead; nothing is written to your vault without that opt-in.

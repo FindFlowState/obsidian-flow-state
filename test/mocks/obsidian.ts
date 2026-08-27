@@ -113,6 +113,8 @@ export class ButtonComponent {
   }
   setButtonText(_t: string) { return this; }
   setCta() { return this; }
+  setWarning() { return this; }
+  setDisabled(_d: boolean) { return this; }
   onClick(_fn: () => void) { return this; }
 }
 
