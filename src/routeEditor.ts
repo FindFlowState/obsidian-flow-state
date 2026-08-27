@@ -5,6 +5,12 @@ import { getSupabase, createProject, updateRoute } from "./supabase";
 import { DEFAULT_INGEST_EMAIL_DOMAIN } from "./config";
 import { ensureFolder, atomicWrite } from "./fs";
 import { errorMessage } from "./logger";
+import {
+  parseFrontMatterConfig,
+  resolveFrontMatter,
+  frontMatterValueToText,
+  renderFrontMatterPreview,
+} from "./content";
 
 // Inline folder typeahead using Obsidian's AbstractInputSuggest
 class FolderInputSuggest extends AbstractInputSuggest<TFolder> {
@@ -48,6 +54,38 @@ class FolderInputSuggest extends AbstractInputSuggest<TFolder> {
     // Force dropdown to disappear in some Obsidian builds
     this.inputEl.blur();
     window.setTimeout(() => this.inputEl.focus(), 0);
+  }
+}
+
+// Property-name typeahead over keys already used in this vault's front matter,
+// so "course" doesn't drift into "Course" and quietly fracture a Base.
+class PropertyKeySuggest extends AbstractInputSuggest<string> {
+  private onChoose: (key: string) => void;
+  constructor(app: App, public inputEl: HTMLInputElement, onChoose: (key: string) => void) {
+    super(app, inputEl);
+    this.onChoose = onChoose;
+  }
+  getSuggestions(query: string): string[] {
+    const q = query.toLowerCase();
+    const keys = new Set<string>();
+    for (const f of this.app.vault.getMarkdownFiles()) {
+      const fm = this.app.metadataCache.getFileCache(f)?.frontmatter;
+      if (!fm) continue;
+      for (const k of Object.keys(fm)) {
+        if (k !== "position") keys.add(k);
+      }
+    }
+    return [...keys]
+      .filter((k) => !q || k.toLowerCase().includes(q))
+      .sort((a, b) => a.localeCompare(b))
+      .slice(0, 20);
+  }
+  renderSuggestion(value: string, el: HTMLElement): void { el.setText(value); }
+  selectSuggestion(value: string, _evt: MouseEvent | KeyboardEvent): void {
+    this.inputEl.value = value;
+    this.onChoose(value);
+    this.inputEl.dispatchEvent(new Event("input"));
+    this.close();
   }
 }
 
@@ -110,6 +148,14 @@ export function renderRouteEditor(
   let includeOriginalFile = existing?.include_original_file ?? true;
   const destConfig = (existing?.destination_config ?? {}) as Record<string, unknown>;
   let embedOriginal = destConfig.embed_original !== false; // default true
+  const savedFm = parseFrontMatterConfig(destConfig);
+  let fmEnabled = savedFm?.enabled ?? false;
+  // Values edit as plain text; coercion (lists, booleans, numbers, tokens)
+  // happens at sync time in resolveFrontMatter.
+  const fmProps: { key: string; value: string }[] = (savedFm?.properties ?? []).map((p) => ({
+    key: p.key,
+    value: frontMatterValueToText(p.value),
+  }));
   let appendToExisting = existing?.append_to_existing ?? false;
   let customInstructions = existing?.custom_instructions ?? "";
   let aiTitleInstructions = existing?.ai_title_instructions ?? "";
@@ -285,6 +331,94 @@ export function renderRouteEditor(
     .addToggle((tg) => tg.setValue(embedOriginal).onChange((v) => embedOriginal = v));
   updateEmbedToggleVisibility();
 
+  // Note properties (foldable) — per-Flow front matter stamped on new notes.
+  // Only the plugin edits this config; mobile/web leave destination_config
+  // alone for Obsidian Flows.
+  const fmFold = addFoldableSection(containerEl, "Note Properties");
+  if (fmEnabled && fmProps.length > 0) fmFold.setOpen(true);
+
+  new Setting(fmFold.body)
+    .setName("Add properties to new notes")
+    .setDesc("Stamp these as front matter on every note this Flow creates. Handy for Obsidian Bases.")
+    .addToggle((tg) => tg.setValue(fmEnabled).onChange((v) => {
+      fmEnabled = v;
+      updateFmBodyVisibility();
+    }));
+
+  const fmBody = fmFold.body.createDiv({ cls: "fs-fm-body" });
+  const fmRowsHost = fmBody.createDiv();
+
+  const fmPreviewWrap = fmBody.createDiv({ cls: "fs-fm-preview-wrap" });
+  fmPreviewWrap.createDiv({ text: "Preview", cls: "fs-fm-preview-label" });
+  const fmPreviewEl = fmPreviewWrap.createEl("pre", { cls: "fs-fm-preview" });
+
+  const updateFmPreview = () => {
+    const resolved = resolveFrontMatter(
+      {
+        enabled: true,
+        properties: fmProps
+          .map((p) => ({ key: p.key.trim(), value: p.value.trim() }))
+          .filter((p) => p.key.length > 0),
+      },
+      new Date(),
+    );
+    const hasProps = Object.keys(resolved).length > 0;
+    fmPreviewWrap.toggleClass("fs-hidden", !hasProps);
+    fmPreviewEl.setText(renderFrontMatterPreview(resolved));
+  };
+
+  const renderFmRows = () => {
+    fmRowsHost.empty();
+    for (const prop of fmProps) {
+      const row = fmRowsHost.createDiv({ cls: "fs-fm-row" });
+      const keyInput = row.createEl("input", { type: "text", cls: "fs-fm-key" });
+      keyInput.placeholder = "property";
+      keyInput.value = prop.key;
+      keyInput.addEventListener("input", () => {
+        prop.key = keyInput.value;
+        updateFmPreview();
+      });
+      new PropertyKeySuggest(app, keyInput, (k) => {
+        prop.key = k;
+        updateFmPreview();
+      });
+      const valueInput = row.createEl("input", { type: "text", cls: "fs-fm-value" });
+      valueInput.placeholder = "value";
+      valueInput.value = prop.value;
+      valueInput.addEventListener("input", () => {
+        prop.value = valueInput.value;
+        updateFmPreview();
+      });
+      const removeBtn = row.createEl("button", { text: "✕", cls: "fs-fm-remove" });
+      removeBtn.setAttribute("aria-label", "Remove property");
+      removeBtn.addEventListener("click", () => {
+        const idx = fmProps.indexOf(prop);
+        if (idx >= 0) fmProps.splice(idx, 1);
+        renderFmRows();
+      });
+    }
+
+    const footer = fmRowsHost.createDiv({ cls: "fs-fm-footer" });
+    const addBtn = footer.createEl("button", { text: "+ Add property", cls: "fs-fm-add" });
+    addBtn.addEventListener("click", () => {
+      fmProps.push({ key: "", value: "" });
+      renderFmRows();
+      const inputs = fmRowsHost.querySelectorAll<HTMLInputElement>(".fs-fm-key");
+      inputs[inputs.length - 1]?.focus();
+    });
+    footer.createDiv({
+      text: "{{date}} and {{time}} fill in the capture date and time. Commas make a list.",
+      cls: "fs-fm-hint",
+    });
+    updateFmPreview();
+  };
+
+  const updateFmBodyVisibility = () => {
+    fmBody.toggleClass("fs-hidden", !fmEnabled);
+  };
+  renderFmRows();
+  updateFmBodyVisibility();
+
   // Enrichment Options (foldable)
   const aiFold = addFoldableSection(containerEl, "Enrichment Options");
   const routeInstrSetting = new Setting(aiFold.body)
@@ -457,7 +591,18 @@ export function renderRouteEditor(
         destination_location: destinationFolder,
         append_to_existing: appendToExisting,
         include_original_file: includeOriginalFile,
-        destination_config: { ...destConfig, embed_original: embedOriginal },
+        destination_config: {
+          ...destConfig,
+          embed_original: embedOriginal,
+          front_matter: {
+            enabled: fmEnabled,
+            // Rows persist even while the toggle is off, so flipping it back
+            // on doesn't lose the setup. Empty keys are dropped.
+            properties: fmProps
+              .map((p) => ({ key: p.key.trim(), value: p.value.trim() }))
+              .filter((p) => p.key.length > 0),
+          },
+        },
         custom_instructions: customInstructions || null,
         use_ai_title: true, // Always use AI-generated titles
         ai_title_instructions: aiTitleInstructions || null,

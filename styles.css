@@ -42,3 +42,17 @@
 .fs-credit-row { border-top: none; padding: 6px 0; }
 .fs-credits-badge { font-size: 0.85em; color: var(--text-muted); margin-left: 8px; }
 .fs-badge-accent { color: var(--interactive-accent); }
+
+/* ---- Note properties (front matter) editor ---- */
+.fs-fm-body { margin-top: 6px; }
+.fs-fm-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.fs-fm-key { flex: 0 0 38%; }
+.fs-fm-value { flex: 1; }
+.fs-fm-remove { flex: none; background: transparent; border: none; color: var(--text-muted); cursor: pointer; padding: 4px 6px; }
+.fs-fm-remove:hover { color: var(--text-error); }
+.fs-fm-footer { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
+.fs-fm-add { background: transparent; border: 1px dashed var(--interactive-accent); color: var(--interactive-accent); border-radius: 6px; padding: 4px 12px; cursor: pointer; }
+.fs-fm-hint { font-size: 0.85em; color: var(--text-muted); }
+.fs-fm-preview-wrap { margin-top: 4px; }
+.fs-fm-preview-label { font-size: 0.85em; color: var(--text-muted); margin-bottom: 4px; }
+.fs-fm-preview { font-size: 0.85em; background: var(--background-secondary); border: 1px solid var(--background-modifier-border); border-radius: 6px; padding: 10px 12px; margin: 0; overflow-x: auto; }
