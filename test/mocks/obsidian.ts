@@ -139,7 +139,12 @@ export class Plugin {
 }
 
 export const Platform = { isMobile: false };
-export class Notice { constructor(_: string) {} }
+export class Notice {
+  static shown: string[] = [];
+  constructor(message: string, _timeoutMs?: number) {
+    Notice.shown.push(String(message));
+  }
+}
 
 export class Modal {
   app: any;

@@ -24,6 +24,8 @@ export type PluginSettings = {
   onboardingDismissed?: boolean;
   // Account ids that already went through first-sign-in starter setup
   starterSetupUsers?: string[];
+  // The one-time "your first note just landed" notice was already shown
+  firstSyncNoticeShown?: boolean;
 };
 
 export const DEFAULT_SETTINGS: PluginSettings = {
@@ -33,7 +35,8 @@ export const DEFAULT_SETTINGS: PluginSettings = {
   lastUserId: "",
   authStore: {},
   onboardingDismissed: false,
-  starterSetupUsers: []
+  starterSetupUsers: [],
+  firstSyncNoticeShown: false
 };
 
 export class FlowStateSettingTab extends PluginSettingTab {

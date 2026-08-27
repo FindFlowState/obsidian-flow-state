@@ -8,7 +8,7 @@ import { downloadFromStorage } from "./storage";
 import { log, warn, error, errorMessage } from "./logger";
 import { initSentry, captureException } from "./sentry";
 import { OnboardingModal } from "./onboarding";
-import { runFirstSignInSetup } from "./firstRun";
+import { runFirstSignInSetup, firstDeliveryNoticeText, deliveryNoticeText } from "./firstRun";
 
 // Minimal shape of Obsidian's undocumented settings API used for deep links.
 type ObsidianSettingApi = { open(): Promise<void>; openTabById(id: string): void };
@@ -251,6 +251,7 @@ export default class FlowStatePlugin extends Plugin {
             log("deep-link sync: synced remaining jobs", { count: remaining.length });
 
             this.setStatus(`delivered ${allSyncedPaths.length} item${allSyncedPaths.length === 1 ? "" : "s"}`);
+            this.notifyDelivered(allSyncedPaths);
           } catch (e: unknown) {
             error("deep-link sync error", e);
             captureException(e, { context: "deepLinkSync" });
@@ -421,6 +422,9 @@ export default class FlowStatePlugin extends Plugin {
       this.setStatus("Syncing...");
       const paths = await this.syncOnce();
       this.setStatus(`delivered ${paths.length} item${paths.length === 1 ? "" : "s"}`);
+      // Deliveries are events the user cares about, so announce them even for
+      // silent background syncs (silent only suppresses errors/nagging).
+      this.notifyDelivered(paths);
       return paths;
     } catch (e: unknown) {
       error("Sync error", e);
@@ -454,6 +458,21 @@ export default class FlowStatePlugin extends Plugin {
   /** Forget the cached vault connection id (call on sign-out / account switch). */
   clearMyConnectionId(): void {
     this.myConnectionId = null;
+  }
+
+  /**
+   * Announce delivered notes. The very first synced note gets a longer,
+   * one-time notice (tracked in settings); later deliveries get a short count.
+   */
+  notifyDelivered(paths: string[]): void {
+    if (paths.length === 0) return;
+    if (!this.settings.firstSyncNoticeShown) {
+      this.settings.firstSyncNoticeShown = true;
+      void this.saveData(this.settings);
+      new Notice(firstDeliveryNoticeText(paths[paths.length - 1]), 10000);
+    } else {
+      new Notice(deliveryNoticeText(paths.length));
+    }
   }
 
   /** Open the first-run onboarding modal (no-op if already open). */

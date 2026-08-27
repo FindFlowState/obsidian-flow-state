@@ -47,6 +47,22 @@ You have 50 free credits to play with — one page of handwriting or one minute 
 }
 
 /**
+ * Notice shown the very first time a synced note lands in the vault — the
+ * payoff moment the welcome note promises, so it shouldn't happen silently.
+ *
+ * ⚠️ User-facing copy — follow the Flowstate voice guides before editing.
+ */
+export function firstDeliveryNoticeText(path: string): string {
+  const name = (path.split("/").pop() ?? "note").replace(/\.md$/i, "");
+  return `Your first note just landed: "${name}". Flowstate will keep delivering new notes automatically.`;
+}
+
+/** Notice for later deliveries (background syncs included). */
+export function deliveryNoticeText(count: number): string {
+  return `Flowstate: ${count} new note${count === 1 ? "" : "s"} in your vault`;
+}
+
+/**
  * One-time setup after a user's first sign-in from this vault:
  *  - if the account has no flows for this vault, create a starter "Inbox"
  *    flow saving into the "Flowstate" folder
