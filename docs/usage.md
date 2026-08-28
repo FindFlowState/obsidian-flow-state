@@ -60,13 +60,15 @@ Flowstate automatically syncs completed transcriptions to your vault. Here's how
 
 When you upload from the mobile app, Flowstate can automatically open the synced note in Obsidian once it's ready.
 
+### Recent uploads
+
+Settings → Flowstate shows your last few uploads with live status — processing, syncing, delivered (click to open the note), or failed (with the reason). For anything older, follow **Full history in the web app →**.
+
 ### Credits
 
 Each page or minute of audio uses one credit. You get 50 free credits to get started.
 
-To check your balance, open Settings → Flowstate → expand the **Credits** section.
-
-Need more credits? Click **Manage Credits** to upgrade your plan or buy top-ups.
+Your balance shows next to your email at the top of Settings → Flowstate (hover it for the subscription vs. top-up breakdown). Need more? Click **Manage credits** to upgrade your plan or buy top-ups.
 
 ## Privacy
 

@@ -512,6 +512,41 @@ export async function deleteRoute(
   if (error) throw error;
 }
 
+/** Slice of a job the Recent-uploads strip renders. */
+export type RecentJob = {
+  id: string;
+  final_title: string | null;
+  original_filename: string | null;
+  status: string | null;
+  has_error: boolean | null;
+  error_message: string | null;
+  destination_url: string | null;
+  created_at: string;
+};
+
+/**
+ * The newest jobs for THIS vault's connection, newest first — the settings
+ * tab's "Recent uploads" strip. Deliberately tiny (no pagination/filtering):
+ * the full history lives in the web app.
+ */
+export async function listRecentJobs(
+  supabase: SupabaseClient<Database>,
+  connectionId: string,
+  limit = 5
+): Promise<RecentJob[]> {
+  const { data, error } = await supabase
+    .from("jobs")
+    .select(
+      "id, final_title, original_filename, status, has_error, error_message, destination_url, created_at, routes!inner(connection_id, connections!inner(service_type))"
+    )
+    .eq("routes.connection_id", connectionId)
+    .eq("routes.connections.service_type", "obsidian")
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  if (error) throw error;
+  return data ?? [];
+}
+
 /** The signed-in user's handle (used in Flow ingest emails), or null. */
 export async function fetchUserHandle(
   supabase: SupabaseClient<Database>

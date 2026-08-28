@@ -134,6 +134,7 @@ export class Setting {
   constructor(_containerEl: HTMLElement) {}
   setName(_name: string) { return this; }
   setDesc(_desc: string) { return this; }
+  setHeading() { return this; }
   addText(cb: (t: { setPlaceholder: (s: string) => any; setValue: (v: string) => any; setDisabled: (d: boolean) => any; onChange: (fn: (v: string) => void) => any; inputEl: HTMLInputElement }) => void) {
     const input = (typeof document !== 'undefined' ? document.createElement('input') : ({ style: {} } as any)) as HTMLInputElement;
     const api = {

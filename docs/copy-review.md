@@ -71,6 +71,24 @@ Command palette entry (`src/main.ts`): **ST-0** "Get started"
 
 (Sign-in success and bad-code notices reuse OB-23 / OB-24.)
 
+Signed-in account bar (replaces the old Account row + Credits section):
+
+| ID | Where | Text |
+|----|-------|------|
+| ST-9 | Credits chip | {n} credit(s) — or "Unlimited" |
+| ST-10 | Chip hover tooltip | Subscription: {x} (rolls over while subscribed) · Top-ups: {y} (never expire) |
+| ST-11 | Buttons | Manage credits · Log out |
+
+Recent uploads section:
+
+| ID | Where | Text |
+|----|-------|------|
+| ST-12 | Section heading | Recent uploads |
+| ST-13 | Empty state | Nothing here yet — send something and it'll show up. |
+| ST-14 | Status labels | Delivered · Syncing… · Processing… · {error message} when failed |
+| ST-15 | Link | Full history in the web app → |
+| ST-16 | Load failure | Couldn't load recent uploads |
+
 ---
 
 ## 3. Sample note offer (`src/sampleNoteModal.ts`)

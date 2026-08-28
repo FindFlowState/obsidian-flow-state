@@ -2,7 +2,8 @@ import { App, PluginSettingTab, Setting, Notice, ButtonComponent } from "obsidia
 import type FlowStatePlugin from "./main";
 import type { Route } from "./types";
 import { DEFAULT_SUPABASE_URL, DEFAULT_SUPABASE_ANON_KEY } from "./config";
-import { getSupabase, getCurrentSession, signOut as supaSignOut, sendMagicLink, verifyEmailOtp, listObsidianRoutes, deleteRoute, fetchRouteById, fetchUserCredits } from "./supabase";
+import { getSupabase, getCurrentSession, signOut as supaSignOut, sendMagicLink, verifyEmailOtp, listObsidianRoutes, listRecentJobs, deleteRoute, fetchRouteById, fetchUserCredits } from "./supabase";
+import { formatRelativeTime } from "./time";
 import { GetAppModal } from "./getAppModal";
 import { openUploadModal } from "./uploadModal";
 import { renderRouteEditor } from "./routeEditor";
@@ -164,16 +165,23 @@ export class FlowStateSettingTab extends PluginSettingTab {
         if (isSignedIn) {
           const signedInEmail = session?.user?.email ?? "";
           this.pendingOtpEmail = null;
-          // Hide onboarding bullets when signed in
+          // Hide onboarding bullets and the sign-in row when signed in
           bulletsSection.addClass("fs-hidden");
-          // Show prominent connected status
-          connectSetting.setName("Account");
-          connectSetting.setDesc("");
-          const statusEl = connectSetting.descEl.createDiv({ cls: "fs-status-row" });
-          statusEl.createSpan({ cls: "fs-status-dot" });
-          statusEl.createSpan({ text: `Connected as ${signedInEmail}`, cls: "fs-muted-text" });
+          connectSetting.settingEl.addClass("fs-hidden");
 
-          const logoutBtn = new ButtonComponent(connectSetting.controlEl.createDiv());
+          // Compact account bar: status + email + credits chip, Manage / Log out
+          const bar = authSection.createDiv({ cls: "fs-account-bar" });
+          const info = bar.createDiv({ cls: "fs-account-info" });
+          info.createSpan({ cls: "fs-status-dot" });
+          info.createSpan({ text: signedInEmail, cls: "fs-account-email" });
+          const creditsChip = info.createSpan({ text: "…", cls: "fs-credits-chip" });
+          const actions = bar.createDiv({ cls: "fs-account-actions" });
+          const manageBtn = new ButtonComponent(actions);
+          manageBtn.setButtonText("Manage credits");
+          manageBtn.onClick(() => {
+            window.open("https://app.startflow.ing/credits", "_blank");
+          });
+          const logoutBtn = new ButtonComponent(actions);
           logoutBtn.setButtonText("Log out");
           logoutBtn.onClick(async () => {
             try {
@@ -198,6 +206,31 @@ export class FlowStateSettingTab extends PluginSettingTab {
               new Notice(`Sign-out failed: ${errorMessage(e)}`);
             }
           });
+
+          // Fill the credits chip (breakdown lives in the hover title; full
+          // management is in the web app)
+          try {
+            const credits = await fetchUserCredits(supabase);
+            if (this.displayGeneration !== generation) return;
+            if (credits) {
+              if (credits.subscription_plan === "unlimited") {
+                creditsChip.setText("Unlimited");
+                creditsChip.addClass("fs-badge-accent");
+              } else {
+                const total = (credits.subscription_credits ?? 0) + (credits.purchased_credits ?? 0);
+                creditsChip.setText(`${total} credit${total === 1 ? "" : "s"}`);
+                creditsChip.setAttribute(
+                  "title",
+                  `Subscription: ${credits.subscription_credits ?? 0} (rolls over while subscribed) · Top-ups: ${credits.purchased_credits ?? 0} (never expire)`
+                );
+              }
+            } else {
+              creditsChip.setText("");
+            }
+          } catch (creditsErr) {
+            console.error("Failed to load credits:", creditsErr);
+            creditsChip.setText("");
+          }
           return;
         }
 
@@ -327,23 +360,9 @@ export class FlowStateSettingTab extends PluginSettingTab {
         }
 
         // Capture section — how notes get INTO Flowstate (the part that
-        // happens outside Obsidian). Collapsible, open by default.
-        containerEl.createDiv({ cls: "fs-divider" });
-        const captureSection = containerEl.createDiv({ cls: "fs-capture-section" });
-        const captureHeaderRow = captureSection.createDiv({ cls: "fs-section-header-row" });
-        const captureArrow = captureHeaderRow.createSpan({ text: "▾", cls: "fs-section-arrow" });
-        captureHeaderRow.createEl("div", { text: "Capture", cls: "fs-section-title" });
-        const captureBody = captureSection.createDiv();
-        let captureOpen = true;
-        const updateCaptureVisibility = () => {
-          captureBody.toggleClass("fs-hidden", !captureOpen);
-          captureArrow.textContent = captureOpen ? "▾" : "▸";
-        };
-        captureHeaderRow.addEventListener("click", () => {
-          captureOpen = !captureOpen;
-          updateCaptureVisibility();
-        });
-        updateCaptureVisibility();
+        // happens outside Obsidian). Always visible, native heading.
+        new Setting(containerEl).setName("Capture").setHeading();
+        const captureBody = containerEl.createDiv();
 
         const captureIntro = captureBody.createDiv({ cls: "setting-item-description fs-capture-intro" });
         captureIntro.setText("Capture from your phone, by email (each flow has its own address — see its Email Options), or upload right here. Transcriptions land back in this vault on their own.");
@@ -370,29 +389,11 @@ export class FlowStateSettingTab extends PluginSettingTab {
           })
         );
 
-        // Projects section (collapsible, open by default)
-        containerEl.createDiv({ cls: "fs-divider" });
+        // Flows section — always visible, native heading
+        new Setting(containerEl).setName("Flows").setHeading();
+        const projectsBody = containerEl.createDiv();
 
-        const projectsSection = containerEl.createDiv({ cls: "fs-projects-section" });
-        const projectsHeaderRow = projectsSection.createDiv({ cls: "fs-section-header-row" });
-
-        const projectsArrow = projectsHeaderRow.createSpan({ text: "▾", cls: "fs-section-arrow" });
-        projectsHeaderRow.createEl("div", { text: "Flows", cls: "fs-section-title" });
-
-        const projectsBody = projectsSection.createDiv();
-        let projectsOpen = true;
-
-        const updateProjectsVisibility = () => {
-          projectsBody.toggleClass("fs-hidden", !projectsOpen);
-          projectsArrow.textContent = projectsOpen ? "▾" : "▸";
-        };
-        projectsHeaderRow.addEventListener("click", () => {
-          projectsOpen = !projectsOpen;
-          updateProjectsVisibility();
-        });
-        updateProjectsVisibility();
-
-        // Projects description and buttons
+        // Flows description and buttons
         const header = new Setting(projectsBody)
           .setDesc("Flows describe how to transcribe and save your uploads.");
         header.settingEl.addClass("fs-setting-flush");
@@ -527,92 +528,80 @@ export class FlowStateSettingTab extends PluginSettingTab {
         if (this.displayGeneration !== generation) return;
         renderRows(valid);
 
-        // Credits section (collapsible, collapsed by default)
-        containerEl.createDiv({ cls: "fs-divider" });
-
-        // Collapsible header
-        const creditsSection = containerEl.createDiv({ cls: "fs-credits-section" });
-        const creditsHeaderRow = creditsSection.createDiv({ cls: "fs-section-header-row" });
-
-        const creditsArrow = creditsHeaderRow.createSpan({ text: "▸", cls: "fs-section-arrow" });
-        creditsHeaderRow.createEl("div", { text: "Credits", cls: "fs-section-title" });
-        // Badge to show total credits in collapsed state
-        const creditsBadge = creditsHeaderRow.createSpan({ text: "", cls: "fs-credits-badge" });
-
-        const creditsBody = creditsSection.createDiv();
-        let creditsOpen = false;
-
-        const updateCreditsVisibility = () => {
-          creditsBody.toggleClass("fs-hidden", !creditsOpen);
-          creditsArrow.textContent = creditsOpen ? "▾" : "▸";
-        };
-        creditsHeaderRow.addEventListener("click", () => {
-          creditsOpen = !creditsOpen;
-          updateCreditsVisibility();
+        // Recent uploads — a tiny status strip, not a history view. Shows the
+        // last few jobs (in-flight, delivered, failed); everything older
+        // lives in the web app.
+        new Setting(containerEl).setName("Recent uploads").setHeading();
+        const recentHost = containerEl.createDiv({ cls: "fs-recent-list" });
+        recentHost.createDiv({ text: "Loading…", cls: "setting-item-description" });
+        const historyLinkRow = containerEl.createDiv({ cls: "fs-history-link" });
+        const historyLink = historyLinkRow.createEl("a", {
+          text: "Full history in the web app →",
+          cls: "fs-muted-link",
         });
-        updateCreditsVisibility();
-
-        const creditsHost = creditsBody.createDiv();
-        const creditsLoading = creditsHost.createDiv({ cls: "setting-item-description" });
-        creditsLoading.setText("Loading credits…");
+        historyLink.addEventListener("click", (e) => {
+          e.preventDefault();
+          window.open("https://app.startflow.ing", "_blank");
+        });
 
         try {
-          const credits = await fetchUserCredits(supabase);
+          const jobs = await listRecentJobs(supabase, connectionId, 5);
           // Bail out if a newer display() was called
           if (this.displayGeneration !== generation) return;
-          creditsHost.empty();
+          recentHost.empty();
 
-          if (credits) {
-            const isUnlimited = credits.subscription_plan === "unlimited";
-            const total = (credits.subscription_credits ?? 0) + (credits.purchased_credits ?? 0);
+          if (jobs.length === 0) {
+            recentHost.createDiv({
+              text: "Nothing here yet — send something and it'll show up.",
+              cls: "setting-item-description",
+            });
+          }
+          for (const job of jobs) {
+            const failed = !!job.has_error;
+            const delivered = job.status === "delivered";
+            const row = recentHost.createDiv({ cls: "fs-recent-row" });
+            row.createSpan({
+              cls: `fs-recent-dot ${failed ? "fs-dot-error" : delivered ? "fs-dot-ok" : "fs-dot-pending"}`,
+            });
+            const info = row.createDiv({ cls: "fs-recent-info" });
+            const title = job.final_title
+              || (job.original_filename ? job.original_filename.replace(/\.[^/.]+$/, "") : "Untitled");
+            info.createDiv({ text: title, cls: "fs-recent-title" });
+            const statusLabel = failed
+              ? (job.error_message || "Failed")
+              : delivered ? "Delivered"
+              : job.status === "transcribed" ? "Syncing…"
+              : "Processing…";
+            info.createDiv({
+              text: `${statusLabel} · ${formatRelativeTime(job.created_at)}`,
+              cls: `fs-recent-meta${failed ? " fs-error-text" : ""}`,
+            });
 
-            // Update collapsed header badge
-            if (isUnlimited) {
-              creditsBadge.setText("(Unlimited)");
-              creditsBadge.addClass("fs-badge-accent");
-            } else {
-              creditsBadge.setText(`(${total})`);
-            }
-
-            // Explanation text with Manage Credits button
-            const creditsDescSetting = new Setting(creditsHost)
-              .setDesc(isUnlimited
-                ? "You have an Unlimited plan. Upload as much as you want!"
-                : "Each page or minute of audio that you upload uses one credit. You get 50 free credits to get started. Need more? Upgrade your plan or buy top-ups.");
-            creditsDescSetting.settingEl.addClass("fs-setting-flush");
-            creditsDescSetting.addButton((b) =>
-              b.setCta()
-                .setButtonText("Manage Credits")
-                .onClick(() => {
-                  window.open("https://app.startflow.ing/credits", "_blank");
-                })
-            );
-
-            if (!isUnlimited) {
-              const totalSetting = new Setting(creditsHost)
-                .setName("Total Credits")
-                .setDesc(String(total));
-              totalSetting.settingEl.addClass("fs-credit-row");
-
-              const subscriptionSetting = new Setting(creditsHost)
-                .setName("Subscription Credits")
-                .setDesc(`${credits.subscription_credits ?? 0} (rolls over while subscribed)`);
-              subscriptionSetting.settingEl.addClass("fs-credit-row");
-
-              const topupSetting = new Setting(creditsHost)
-                .setName("Top-up Credits")
-                .setDesc(`${credits.purchased_credits ?? 0} (never expire)`);
-              topupSetting.settingEl.addClass("fs-credit-row");
+            // Delivered rows open the note in the vault
+            const fileMatch = delivered && job.destination_url
+              ? job.destination_url.match(/file=([^&]+)/)
+              : null;
+            if (fileMatch) {
+              row.addClass("fs-recent-clickable");
+              row.addEventListener("click", () => {
+                let path = decodeURIComponent(fileMatch[1]);
+                while (path.startsWith("/")) path = path.slice(1);
+                try {
+                  (this.app as unknown as { setting: { close(): void } }).setting.close();
+                } catch { /* best-effort */ }
+                void this.app.workspace.openLinkText(path, "", false);
+              });
             }
           }
-        } catch (creditsErr) {
+        } catch (recentErr) {
           // Bail out if a newer display() was called
           if (this.displayGeneration !== generation) return;
-          console.error("Failed to load credits:", creditsErr);
-          creditsHost.empty();
-          const errorDiv = creditsHost.createDiv({ cls: "setting-item-description" });
-          errorDiv.setText("Failed to load credits");
-          errorDiv.addClass("fs-error-text");
+          console.error("Failed to load recent uploads:", recentErr);
+          recentHost.empty();
+          recentHost.createDiv({
+            text: "Couldn't load recent uploads",
+            cls: "setting-item-description fs-error-text",
+          });
         }
       } catch (e) {
         console.error(e);
