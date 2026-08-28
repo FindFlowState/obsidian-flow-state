@@ -10,6 +10,7 @@ import { initSentry, captureException } from "./sentry";
 import { OnboardingModal } from "./onboarding";
 import { runFirstSignInSetup, firstDeliveryNoticeText, deliveryNoticeText } from "./firstRun";
 import { WelcomeView, WELCOME_VIEW_TYPE } from "./welcomeView";
+import { openUploadModal } from "./uploadModal";
 
 // Minimal shape of Obsidian's undocumented settings API used for deep links.
 type ObsidianSettingApi = { open(): Promise<void>; openTabById(id: string): void };
@@ -66,6 +67,20 @@ export default class FlowStatePlugin extends Plugin {
       id: "sync-now",
       name: "Sync Now",
       callback: () => this.syncNow(),
+    });
+
+    this.addCommand({
+      id: "upload-file",
+      name: "Upload a file",
+      callback: async () => {
+        const supabase = getSupabase(this.settings);
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) {
+          new Notice('Flowstate: sign in first — run "Flowstate: Get started" or open Settings → Flowstate.');
+          return;
+        }
+        openUploadModal(this.app, this);
+      },
     });
 
     this.addCommand({

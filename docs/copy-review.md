@@ -203,6 +203,8 @@ Notices:
 | UP-23 | Too large | {file} is too large. Maximum size is 100MB. |
 | UP-24 | New flow unnamed | Give your new flow a name first. |
 | UP-25 | Success | {n} file(s) sent to Flowstate. The notes land in your vault in a minute or two. |
+| UP-26 | Command palette entry (`src/main.ts`) | Upload a file |
+| UP-27 | Command while signed out | Flowstate: sign in first — run "Flowstate: Get started" or open Settings → Flowstate. |
 
 ---
 

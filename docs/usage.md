@@ -45,7 +45,7 @@ Flows control where and how notes are saved. You can create multiple flows to ha
 
 There are several ways to send notes to Flowstate:
 
-- **From Obsidian:** Open **Settings → Flowstate → Capture** and click **Upload**. Pick images, PDFs, or audio files, choose the flow to send them to (or create a new one), optionally add file instructions for this upload, and check the estimated credits before sending
+- **From Obsidian:** Open **Settings → Flowstate → Capture** and click **Upload**, or run the "Flowstate: Upload a file" command (`Cmd/Ctrl + P`). Pick images, PDFs, or audio files, choose the flow to send them to (or create a new one), optionally add file instructions for this upload, and check the estimated credits before sending
 - **Mobile app:** Take a photo or record audio in the [Flowstate mobile app](https://seekflowstate.com), then tap to upload
 - **Email:** Send to your flow's unique email address
   - Supports: 1 PDF, 1 audio file, or multiple PNG/JPG images (combined into one note)
