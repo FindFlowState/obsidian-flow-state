@@ -4,6 +4,7 @@ import { FlowStateSettingTab, PluginSettings, DEFAULT_SETTINGS } from "./setting
 import { getSupabase, createDataJsonAuthStorage, exchangeFromObsidianParams, fetchRouteById, ensureObsidianConnection, updateRoute } from "./supabase";
 import { DEFAULT_SUPABASE_URL, DEFAULT_SUPABASE_ANON_KEY } from "./config";
 import { ensureFolder, atomicWrite, writeBinaryToAttachments, buildSafeNoteFilename } from "./fs";
+import { parseFrontMatterConfig, resolveFrontMatter } from "./content";
 import { downloadFromStorage } from "./storage";
 import { log, warn, error, errorMessage } from "./logger";
 import { initSentry, captureException } from "./sentry";
@@ -574,6 +575,7 @@ export default class FlowStatePlugin extends Plugin {
       // Create new file if not exists
       await atomicWrite(app, filePath, content);
       log(`writeJobToVault: created new file ${filePath}`);
+      await this.applyFrontMatter(filePath, route!, it);
       return filePath;
     } else {
       // Always use backend-provided final_title (fallback to original filename) for new files
@@ -588,7 +590,33 @@ export default class FlowStatePlugin extends Plugin {
       const finalPath = await this.resolveConflictPath(relPath);
       await atomicWrite(app, finalPath, content);
       log(`writeJobToVault: wrote new file ${finalPath}`);
+      await this.applyFrontMatter(finalPath, route!, it);
       return finalPath;
+    }
+  }
+
+  /**
+   * Stamp the route's configured note properties onto a note this sync just
+   * created. Only files created by the write get properties — appending to an
+   * existing note never touches its front matter, so the user's own edits win.
+   * Failures are non-fatal: the note is already in the vault.
+   */
+  async applyFrontMatter(filePath: string, route: Route, job: Job): Promise<void> {
+    const config = parseFrontMatterConfig(route.destination_config);
+    if (!config?.enabled || config.properties.length === 0) return;
+    const capturedAtMs = Date.parse(job.created_at ?? "");
+    const capturedAt = Number.isNaN(capturedAtMs) ? new Date() : new Date(capturedAtMs);
+    const resolved = resolveFrontMatter(config, capturedAt);
+    if (Object.keys(resolved).length === 0) return;
+    const file = this.app.vault.getAbstractFileByPath(filePath);
+    if (!(file instanceof TFile)) return;
+    try {
+      await this.app.fileManager.processFrontMatter(file, (fm: Record<string, unknown>) => {
+        for (const [key, value] of Object.entries(resolved)) fm[key] = value;
+      });
+      log(`applyFrontMatter: stamped ${Object.keys(resolved).length} properties onto ${filePath}`);
+    } catch (e) {
+      warn("applyFrontMatter: failed to write note properties; note delivered without them:", e);
     }
   }
 
