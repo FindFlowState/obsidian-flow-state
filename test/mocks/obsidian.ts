@@ -64,6 +64,70 @@ class Vault {
   getName() { return 'Test Vault'; }
 }
 
+// Small YAML-subset codec (scalars + string lists) so tests can assert the
+// real file content produced through fileManager.processFrontMatter.
+function coerceScalar(raw: string): unknown {
+  if (raw === 'true') return true;
+  if (raw === 'false') return false;
+  if (/^-?\d+(\.\d+)?$/.test(raw)) return Number(raw);
+  return raw;
+}
+
+function parseFrontMatterBlock(raw: string): { fm: Record<string, unknown>; body: string } {
+  if (!raw.startsWith('---\n')) return { fm: {}, body: raw };
+  const end = raw.indexOf('\n---\n', 4);
+  if (end < 0) return { fm: {}, body: raw };
+  const yaml = raw.slice(4, end + 1);
+  const body = raw.slice(end + 5);
+  const fm: Record<string, unknown> = {};
+  let currentListKey: string | null = null;
+  for (const line of yaml.split('\n')) {
+    if (!line.trim()) continue;
+    const listItem = line.match(/^\s+-\s(.*)$/);
+    if (listItem && currentListKey) {
+      (fm[currentListKey] as unknown[]).push(coerceScalar(listItem[1]));
+      continue;
+    }
+    const kv = line.match(/^([^:]+):\s?(.*)$/);
+    if (!kv) continue;
+    const key = kv[1].trim();
+    if (kv[2] === '') {
+      fm[key] = [];
+      currentListKey = key;
+    } else {
+      fm[key] = coerceScalar(kv[2]);
+      currentListKey = null;
+    }
+  }
+  return { fm, body };
+}
+
+function stringifyFrontMatterBlock(fm: Record<string, unknown>): string {
+  const lines: string[] = [];
+  for (const [key, value] of Object.entries(fm)) {
+    if (Array.isArray(value)) {
+      lines.push(`${key}:`);
+      for (const item of value) lines.push(`  - ${String(item)}`);
+    } else {
+      lines.push(`${key}: ${String(value)}`);
+    }
+  }
+  return lines.join('\n');
+}
+
+export class FileManager {
+  constructor(private vault: Vault) {}
+  async processFrontMatter(file: TFile, fn: (fm: Record<string, unknown>) => void) {
+    const raw = await this.vault.read(file);
+    const { fm, body } = parseFrontMatterBlock(raw);
+    fn(fm);
+    const content = Object.keys(fm).length > 0
+      ? `---\n${stringifyFrontMatterBlock(fm)}\n---\n${body}`
+      : body;
+    this.vault.adapter.fs.set(file.path, { type: 'file', content });
+  }
+}
+
 export class Setting {
   settingEl: HTMLElement = (typeof document !== 'undefined' ? document.createElement('div') : ({} as any));
   controlEl: HTMLElement = (typeof document !== 'undefined' ? document.createElement('div') : ({} as any));
@@ -133,7 +197,10 @@ export class PluginSettingTab {
 export class Plugin {
   app: any;
   manifest: any = { id: 'flow-state-obsidian' };
-  constructor() { this.app = { vault: new Vault() }; }
+  constructor() {
+    const vault = new Vault();
+    this.app = { vault, fileManager: new FileManager(vault) };
+  }
   addStatusBarItem() { return { setText(_: string) {} }; }
   addCommand(_: any) {}
   addSettingTab(_: any) {}
