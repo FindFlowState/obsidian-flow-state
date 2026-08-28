@@ -541,7 +541,7 @@ export class FlowStateSettingTab extends PluginSettingTab {
         });
         historyLink.addEventListener("click", (e) => {
           e.preventDefault();
-          window.open("https://app.startflow.ing", "_blank");
+          window.open("https://app.startflow.ing/history", "_blank");
         });
 
         try {
