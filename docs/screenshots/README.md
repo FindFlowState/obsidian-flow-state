@@ -45,6 +45,10 @@ All rendered from the real plugin code in an Obsidian-styled harness.
 
 ![Settings signed in](11-settings-updated.png)
 
+**Recent uploads + account bar (scrolled)**
+
+![Recent uploads](settings-recent.png)
+
 **Get-the-app modal (QR + web app link)**
 
 ![Get the app modal](12-get-app-modal.png)
