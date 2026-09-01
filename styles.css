@@ -30,18 +30,119 @@
 .fs-onboarding-list li { margin-bottom: 4px; }
 .fs-status-row { display: flex; align-items: center; gap: 6px; }
 .fs-status-dot { width: 8px; height: 8px; border-radius: 50%; background-color: var(--color-green); display: inline-block; }
-.fs-divider { border-top: 1px solid var(--background-modifier-border); margin: 16px 0 6px 0; }
-.fs-section-header-row { display: flex; align-items: center; gap: 6px; cursor: pointer; margin-top: 18px; margin-bottom: 6px; }
-.fs-section-arrow { font-size: 0.9em; }
-.fs-section-title { font-size: 1.5em; margin: 0; }
 .fs-setting-flush { border-top: none; padding-top: 0; margin-top: 0; }
 .fs-flow-item { border: 1px solid var(--background-modifier-border); border-radius: 6px; padding: 12px; margin-bottom: 8px; }
 .fs-flow-item .setting-item-name { font-size: 1em; }
 .fs-flow-item .setting-item-description { color: var(--text-muted); }
 .fs-archive-btn { background: transparent; border: 1px solid var(--text-muted); color: var(--text-normal); }
-.fs-credit-row { border-top: none; padding: 6px 0; }
-.fs-credits-badge { font-size: 0.85em; color: var(--text-muted); margin-left: 8px; }
 .fs-badge-accent { color: var(--interactive-accent); }
+
+/* ---- Account bar ---- */
+.fs-account-bar {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 10px 0 4px 0;
+}
+.fs-account-info { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.fs-account-email { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fs-credits-chip {
+  font-size: 0.8em;
+  background: var(--background-secondary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 999px;
+  padding: 2px 10px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+.fs-account-actions { display: flex; gap: 8px; flex-shrink: 0; }
+
+/* ---- Recent uploads ---- */
+.fs-recent-list { display: flex; flex-direction: column; gap: 4px; }
+.fs-recent-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 7px 10px;
+  border-radius: 6px;
+}
+.fs-recent-clickable { cursor: pointer; }
+.fs-recent-clickable:hover { background: var(--background-modifier-hover); }
+.fs-recent-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.fs-dot-ok { background: var(--color-green); }
+.fs-dot-pending { background: var(--color-yellow); }
+.fs-dot-error { background: var(--text-error); }
+.fs-recent-info { min-width: 0; }
+.fs-recent-title { font-size: 0.95em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fs-recent-meta { font-size: 0.8em; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fs-history-link { margin-top: 8px; font-size: 0.9em; padding-left: 10px; }
+
+/* ---- Auth (code sign-in) ---- */
+.fs-auth-links { display: flex; gap: 16px; font-size: 0.85em; margin-top: 2px; }
+
+/* ---- Capture section ---- */
+.fs-capture-intro { margin-bottom: 10px; }
+.fs-capture-email { margin-top: 6px; }
+.fs-capture-email code { font-size: 0.95em; user-select: all; }
+.fs-qr-box { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.fs-qr-img { width: 84px; height: 84px; border-radius: 4px; }
+.fs-qr-caption { font-size: 0.7em; color: var(--text-muted); }
+
+/* ---- Welcome view ---- */
+.fs-welcome-view { padding: 32px 24px; overflow-y: auto; }
+.fs-welcome-inner { max-width: 700px; margin: 0 auto; font-size: 1.05em; line-height: 1.6; }
+
+/* ---- Sample note modal ---- */
+.fs-sample-fineprint { font-size: 0.85em; color: var(--text-muted); margin: 0 0 16px 0; }
+.fs-sample-buttons { display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px; }
+
+/* ---- Get the app modal ---- */
+.fs-getapp-modal { max-width: 420px; }
+.fs-getapp-qr { display: flex; flex-direction: column; align-items: center; gap: 6px; margin: 8px 0 16px 0; }
+.fs-getapp-qr-img { width: 168px; height: 168px; border-radius: 8px; }
+.fs-getapp-links p { margin: 6px 0; font-size: 0.95em; }
+
+/* ---- Upload modal ---- */
+.fs-upload-modal { max-width: 560px; }
+.fs-upload-list { margin: 4px 0 4px 0; display: flex; flex-direction: column; gap: 6px; }
+.fs-upload-row {
+  display: flex; align-items: center; gap: 10px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px; padding: 8px 12px;
+}
+.fs-upload-icon { font-size: 1.1em; }
+.fs-upload-info { flex: 1; min-width: 0; }
+.fs-upload-name { font-size: 0.95em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fs-upload-meta { font-size: 0.8em; color: var(--text-muted); }
+.fs-upload-remove { font-size: 0.85em; flex-shrink: 0; }
+.fs-upload-newflow { border-top: none; padding-top: 4px; }
+.fs-upload-instructions textarea { min-width: 260px; }
+.fs-upload-footer { margin-top: 14px; }
+.fs-upload-summary { margin-bottom: 4px; }
+.fs-upload-estimate { font-weight: 600; font-size: 0.95em; }
+.fs-upload-fineprint { font-size: 0.78em; color: var(--text-muted); margin-top: 2px; }
+
+/* ---- Onboarding modal ---- */
+.fs-ob-modal { max-width: 480px; }
+.fs-ob-tagline { color: var(--text-muted); margin: 0 0 16px 0; }
+.fs-ob-steps { display: flex; flex-direction: column; gap: 12px; margin-bottom: 16px; }
+.fs-ob-step { display: flex; gap: 12px; align-items: flex-start; }
+.fs-ob-step-num {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--interactive-accent);
+  color: var(--text-on-accent);
+  font-size: 0.85em;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.fs-ob-step-title { font-weight: 600; }
+.fs-ob-step-body { font-size: 0.9em; color: var(--text-muted); }
+.fs-ob-credits { font-size: 0.9em; font-weight: 500; margin: 0 0 16px 0; }
+.fs-ob-email-row { display: flex; gap: 8px; }
+.fs-ob-email-row input { flex: 1; }
+.fs-ob-links { display: flex; gap: 16px; font-size: 0.85em; margin-top: 12px; }
+.fs-ob-later { text-align: center; margin-top: 14px; font-size: 0.85em; }
 
 /* ---- Note properties (front matter) editor ---- */
 .fs-fm-body { margin-top: 6px; }

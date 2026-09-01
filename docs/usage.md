@@ -45,6 +45,7 @@ Flows control where and how notes are saved. You can create multiple flows to ha
 
 There are several ways to send notes to Flowstate:
 
+- **From Obsidian:** Open **Settings → Flowstate → Capture** and click **Upload**, or run the "Flowstate: Upload a file" command (`Cmd/Ctrl + P`). Pick images, PDFs, or audio files, choose the flow to send them to (or create a new one), optionally add file instructions for this upload, and check the estimated credits before sending
 - **Mobile app:** Take a photo or record audio in the [Flowstate mobile app](https://seekflowstate.com), then tap to upload
 - **Email:** Send to your flow's unique email address
   - Supports: 1 PDF, 1 audio file, or multiple PNG/JPG images (combined into one note)
@@ -59,13 +60,15 @@ Flowstate automatically syncs completed transcriptions to your vault. Here's how
 
 When you upload from the mobile app, Flowstate can automatically open the synced note in Obsidian once it's ready.
 
+### Recent uploads
+
+Settings → Flowstate shows your last few uploads with live status — processing, syncing, delivered (click to open the note), or failed (with the reason). For anything older, follow **Full history in the web app →**.
+
 ### Credits
 
 Each page or minute of audio uses one credit. You get 50 free credits to get started.
 
-To check your balance, open Settings → Flowstate → expand the **Credits** section.
-
-Need more credits? Click **Manage Credits** to upgrade your plan or buy top-ups.
+Your balance shows next to your email at the top of Settings → Flowstate (hover it for the subscription vs. top-up breakdown). Need more? Click **Manage credits** to upgrade your plan or buy top-ups.
 
 ## Privacy
 
@@ -79,7 +82,7 @@ Need more credits? Click **Manage Credits** to upgrade your plan or buy top-ups.
 | Issue | Solution |
 |-------|----------|
 | **Flow email address not showing** | Email options only appear after a flow is saved. Create the flow first, then edit it to see email options. |
-| **Magic link not working** | Check your spam folder. Make sure you click the link on the same device where Obsidian is open. |
+| **Magic link not working** | Use the 6-digit code from the same email instead — type it into the sign-in box in Obsidian. If you use the link, click it on the same device where Obsidian is open. |
 | **Notes not syncing** | Wait a minute for the automatic background sync, or trigger it manually from the command palette ("Flowstate: Sync Now"). |
 | **"Not signed in" error** | Go to Settings → Flowstate and reconnect your account. |
 | **Destination folder not found** | The plugin auto-creates folders, but make sure the path is valid. Edit your flow and re-select the destination. |

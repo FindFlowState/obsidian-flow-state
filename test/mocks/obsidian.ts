@@ -134,6 +134,7 @@ export class Setting {
   constructor(_containerEl: HTMLElement) {}
   setName(_name: string) { return this; }
   setDesc(_desc: string) { return this; }
+  setHeading() { return this; }
   addText(cb: (t: { setPlaceholder: (s: string) => any; setValue: (v: string) => any; setDisabled: (d: boolean) => any; onChange: (fn: (v: string) => void) => any; inputEl: HTMLInputElement }) => void) {
     const input = (typeof document !== 'undefined' ? document.createElement('input') : ({ style: {} } as any)) as HTMLInputElement;
     const api = {
@@ -177,6 +178,8 @@ export class ButtonComponent {
   }
   setButtonText(_t: string) { return this; }
   setCta() { return this; }
+  setWarning() { return this; }
+  setDisabled(_d: boolean) { return this; }
   onClick(_fn: () => void) { return this; }
 }
 
@@ -201,12 +204,54 @@ export class Plugin {
   }
   addStatusBarItem() { return { setText(_: string) {} }; }
   addCommand(_: any) {}
+  addSettingTab(_: any) {}
+  registerView(_: any, __: any) {}
+  registerEvent(_: any) {}
   registerDomEvent(_: any, __: any, ___: any) {}
   registerObsidianProtocolHandler(_: any, __: any) {}
 }
 
 export const Platform = { isMobile: false };
-export class Notice { constructor(_: string) {} }
+export class Notice {
+  static shown: string[] = [];
+  constructor(message: string, _timeoutMs?: number) {
+    Notice.shown.push(String(message));
+  }
+}
+
+export class WorkspaceLeaf {
+  viewState: any = null;
+  async setViewState(state: any) { this.viewState = state; }
+}
+
+export class ItemView {
+  leaf: any;
+  app: any = {};
+  contentEl: HTMLElement = (typeof document !== 'undefined' ? document.createElement('div') : ({} as any));
+  constructor(leaf: any) { this.leaf = leaf; }
+  async setState(_state: any, _result: any) {}
+  getState(): any { return {}; }
+}
+
+export const MarkdownRenderer = {
+  render: async (_app: any, _md: string, _el: HTMLElement, _path: string, _cmp: any) => {},
+};
+
+export class Modal {
+  app: any;
+  modalEl: HTMLElement;
+  titleEl: HTMLElement;
+  contentEl: HTMLElement;
+  constructor(app: any) {
+    this.app = app;
+    const mk = () => (typeof document !== 'undefined' ? document.createElement('div') : ({} as any));
+    this.modalEl = mk();
+    this.titleEl = mk();
+    this.contentEl = mk();
+  }
+  open() { (this as any).onOpen?.(); }
+  close() { (this as any).onClose?.(); }
+}
 
 export function normalizePath(path: string): string {
   return path.replace(/\\/g, '/').replace(/\/+/g, '/').replace(/\/$/, '');

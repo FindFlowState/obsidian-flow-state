@@ -46,8 +46,10 @@ Flowstate is available in Obsidian's official community plugin store.
 
 ### Step 4: Connect Your Account
 
-1. Still in Settings, click **Flowstate** under Community plugins
-2. Enter your email address and click **Connect**
-3. Check your email for a magic link and click it to sign in (check spam if needed)
+The first time the plugin loads, it opens a short welcome screen — enter your email there and click **Get started**. (Closed it? Open **Settings → Flowstate**, or run the "Flowstate: Get started" command.)
 
-If you don't have a Flowstate account, one will be created automatically.
+1. Enter your email address and click **Get started** (or **Send code** in settings)
+2. Check your email for a 6-digit sign-in code and type it into Obsidian (check spam if needed)
+3. Prefer links? The same email contains a magic link — click it on the device where Obsidian is open
+
+If you don't have a Flowstate account, one will be created automatically. After you sign in, Flowstate creates a starter **Inbox** flow (saving to a `Flowstate` folder) and offers you a **sample note**: say yes and the transcribed welcome letter — with the handwritten original PDF attached — is added to your `Flowstate` folder so you can see exactly what a delivery looks like. Skip it and you get a preview screen instead; nothing is written to your vault without that opt-in.

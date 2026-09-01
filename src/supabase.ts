@@ -241,6 +241,25 @@ export async function sendMagicLink(
   return data;
 }
 
+/**
+ * Verify the emailed one-time code (the same `signInWithOtp` email carries a
+ * magic link and a code; the code works no matter which device the email is
+ * read on). Note: the Supabase email template must include `{{ .Token }}`.
+ */
+export async function verifyEmailOtp(
+  supabase: SupabaseClient<Database>,
+  email: string,
+  token: string
+) {
+  const { data, error } = await supabase.auth.verifyOtp({
+    email,
+    token: token.trim(),
+    type: "email",
+  });
+  if (error) throw error;
+  return data;
+}
+
 export async function exchangeCodeFromUrl(supabase: SupabaseClient<Database>, url: string) {
   // For obsidian:// callback URLs
   const { error } = await supabase.auth.exchangeCodeForSession(url);
@@ -491,6 +510,58 @@ export async function deleteRoute(
     .update({ is_active: false })
     .eq("id", routeId);
   if (error) throw error;
+}
+
+/** Slice of a job the Recent-uploads strip renders. */
+export type RecentJob = {
+  id: string;
+  final_title: string | null;
+  original_filename: string | null;
+  status: string | null;
+  has_error: boolean | null;
+  error_message: string | null;
+  destination_url: string | null;
+  created_at: string;
+};
+
+/**
+ * The newest jobs for THIS vault's connection, newest first — the settings
+ * tab's "Recent uploads" strip. Deliberately tiny (no pagination/filtering):
+ * the full history lives in the web app.
+ */
+export async function listRecentJobs(
+  supabase: SupabaseClient<Database>,
+  connectionId: string,
+  limit = 5
+): Promise<RecentJob[]> {
+  const { data, error } = await supabase
+    .from("jobs")
+    .select(
+      "id, final_title, original_filename, status, has_error, error_message, destination_url, created_at, routes!inner(connection_id, connections!inner(service_type))"
+    )
+    .eq("routes.connection_id", connectionId)
+    .eq("routes.connections.service_type", "obsidian")
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  if (error) throw error;
+  return data ?? [];
+}
+
+/** The signed-in user's handle (used in Flow ingest emails), or null. */
+export async function fetchUserHandle(
+  supabase: SupabaseClient<Database>
+): Promise<string | null> {
+  const { data: userData, error: userErr } = await supabase.auth.getUser();
+  if (userErr) throw userErr;
+  const uid = userData.user?.id;
+  if (!uid) return null;
+  const { data, error } = await supabase
+    .from("users")
+    .select("handle")
+    .eq("id", uid)
+    .single();
+  if (error) return null;
+  return data?.handle ? String(data.handle) : null;
 }
 
 // -------- User credits helpers --------
