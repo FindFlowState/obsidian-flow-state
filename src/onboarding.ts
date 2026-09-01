@@ -53,17 +53,17 @@ export class OnboardingModal extends Modal {
   }
 
   private renderIntro(titleEl: HTMLElement, contentEl: HTMLElement): void {
-    titleEl.setText("Your handwriting, in your vault");
+    titleEl.setText("Your handwriting, transcribed into your vault");
 
     contentEl.createEl("p", {
-      text: "Flowstate transcribes handwritten pages and voice memos and files them here as clean, searchable markdown. The words stay yours — we just do the typing.",
+      text: "Flowstate transcribes handwritten pages and voice memos and files them in Obsidian as clean, searchable markdown.",
       cls: "fs-ob-tagline",
     });
 
     const steps: Array<{ title: string; body: string }> = [
       { title: "Write or record", body: "On paper, an e-ink tablet, or out loud as a voice memo." },
       { title: "Capture it", body: "Snap it with the Flowstate app, or email it from your reMarkable, Boox, or Supernote." },
-      { title: "It lands here", body: "Transcribed, formatted, and filed in this vault — right where you told it to go." },
+      { title: "It lands here", body: "Transcribed, formatted, and filed in your vault." },
     ];
     const list = contentEl.createDiv({ cls: "fs-ob-steps" });
     steps.forEach((s, i) => {
@@ -75,7 +75,7 @@ export class OnboardingModal extends Modal {
     });
 
     contentEl.createEl("p", {
-      text: "Your first 50 pages are free. No card, no catch.",
+      text: "Your first 50 pages are free. No card, no catch. Top up your credits anytime.",
       cls: "fs-ob-credits",
     });
 
@@ -106,7 +106,7 @@ export class OnboardingModal extends Modal {
     const p = contentEl.createEl("p", { cls: "fs-ob-tagline" });
     p.appendText("We sent a sign-in code to ");
     p.createEl("strong", { text: this.email });
-    p.appendText(". Type it below — or click the link in that email on this device.");
+    p.appendText(". Type it below, or click the link (just make sure if you click, it's on this device).");
 
     let code = "";
     const row = contentEl.createDiv({ cls: "fs-ob-email-row" });
@@ -171,7 +171,7 @@ export class OnboardingModal extends Modal {
       const supabase = getSupabase(this.plugin.settings);
       await verifyEmailOtp(supabase, this.email, code);
       this.completed = true;
-      new Notice("You're in. Welcome to Flowstate!");
+      new Notice("HUZZAH! Welcome to Flowstate!");
       this.close();
       await this.plugin.handleSignedIn();
     } catch (e: unknown) {

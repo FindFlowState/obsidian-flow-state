@@ -22,14 +22,14 @@ export class SampleNoteModal extends Modal {
   onOpen(): void {
     this.modalEl.addClass("fs-ob-modal");
     const { titleEl, contentEl } = this;
-    titleEl.setText("Want to see a sample note?");
+    titleEl.setText("Wanna start with a sample note?");
 
     contentEl.createEl("p", {
-      text: "We wrote you a welcome letter by hand and ran it through Flowstate. We can drop the result into your Flowstate folder: the transcribed note, with the handwritten page attached underneath — exactly what a delivery looks like.",
+      text: "We (Raj and Rob, makers of Flowstate) wrote you a welcome note (by hand, of course). Click below, and we'll drop it into your vault to show how Flowstate works.",
       cls: "fs-ob-tagline",
     });
     contentEl.createEl("p", {
-      text: "That's two small files in your vault. Delete them anytime. Skip, and we'll show you a preview instead — nothing gets written.",
+      text: "This will create two small files in your vault. Delete them anytime. Or you can skip, and we'll show you a preview instead. Nothing gets written.",
       cls: "fs-sample-fineprint",
     });
 
@@ -38,7 +38,7 @@ export class SampleNoteModal extends Modal {
     skipBtn.setButtonText("Just show a preview");
     skipBtn.onClick(() => this.choose(false));
     const addBtn = new ButtonComponent(row);
-    addBtn.setCta().setButtonText("Add sample note");
+    addBtn.setCta().setButtonText("Add the sample note!");
     addBtn.onClick(() => this.choose(true));
   }
 

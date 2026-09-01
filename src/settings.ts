@@ -146,7 +146,7 @@ export class FlowStateSettingTab extends PluginSettingTab {
     const authSection = containerEl.createDiv();
     const connectSetting = new Setting(authSection)
       .setName("Sign up or sign in");
-    connectSetting.setDesc("Enter your email and we'll send you a sign-in code. New accounts start with 50 free credits.");
+    connectSetting.setDesc("Enter your email and we'll send you a sign-in code. New accounts start with 50 free pages.");
 
     void (async () => {
       try {
@@ -248,7 +248,13 @@ export class FlowStateSettingTab extends PluginSettingTab {
           // magic link in the same email still works via the deep-link handler.
           const pendingEmail = this.pendingOtpEmail;
           connectSetting.setName("Enter your code");
-          connectSetting.setDesc(`We emailed a sign-in code to ${pendingEmail}. Type it here — or click the link in that email on this device.`);
+          connectSetting.setDesc(
+            createFragment((f) => {
+              f.appendText("We sent a sign-in code to ");
+              f.createEl("strong", { text: pendingEmail });
+              f.appendText(". Type it below, or click the link (just make sure if you click, it's on this device).");
+            })
+          );
 
           let codeValue = "";
           const verify = async () => {
@@ -259,7 +265,7 @@ export class FlowStateSettingTab extends PluginSettingTab {
             try {
               await verifyEmailOtp(supabase, pendingEmail, codeValue);
               this.pendingOtpEmail = null;
-              new Notice("You're in. Welcome to Flowstate!");
+              new Notice("HUZZAH! Welcome to Flowstate!");
               await this.plugin.handleSignedIn();
             } catch (e: unknown) {
               console.error(e);
