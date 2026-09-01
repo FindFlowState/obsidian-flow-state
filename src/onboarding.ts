@@ -75,7 +75,7 @@ export class OnboardingModal extends Modal {
     });
 
     contentEl.createEl("p", {
-      text: "Your first 50 pages are free. No card, no catch. Top up your credits anytime.",
+      text: "Your first 50 credits are free. No card, no catch. Top up your credits anytime.",
       cls: "fs-ob-credits",
     });
 

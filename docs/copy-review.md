@@ -25,7 +25,7 @@ First screen — shown once on plugin load while signed out.
 | OB-6  | Step 2 body       | Snap it with the Flowstate app, or email it from your reMarkable, Boox, or Supernote. |
 | OB-7  | Step 3 title      | It lands here                                                |
 | OB-8  | Step 3 body       | Transcribed, formatted, and filed in your vault.             |
-| OB-9  | Credits line      | Your first 50 pages are free. No card, no catch. Top up your credits anytime. |
+| OB-9  | Credits line      | Your first 50 credits are free. No card, no catch. Top up your credits anytime. |
 | OB-10 | Email placeholder | you@example.com                                              |
 | OB-11 | CTA button        | Get started                                                  |
 | OB-12 | Dismiss link      | Maybe later                                                  |
@@ -61,7 +61,7 @@ Command palette entry (`src/main.ts`): **ST-0** "Get started"
 | ID   | Where                    | Text                                                         |
 |------|--------------------------|--------------------------------------------------------------|
 | ST-1 | Row name                 | Sign up or sign in                                           |
-| ST-2 | Row description          | Enter your email and we'll send you a sign-in code. New accounts start with 50 free pages. |
+| ST-2 | Row description          | Enter your email and we'll send you a sign-in code. New accounts start with 50 free credits. |
 | ST-3 | Button                   | Send code                                                    |
 | ST-4 | Code state — row name    | Enter your code                                              |
 | ST-5 | Code state — description | We sent a sign-in code to **{email}**. Type it below, or click the link (just make sure if you click, it's on this device). |

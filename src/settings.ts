@@ -146,7 +146,7 @@ export class FlowStateSettingTab extends PluginSettingTab {
     const authSection = containerEl.createDiv();
     const connectSetting = new Setting(authSection)
       .setName("Sign up or sign in");
-    connectSetting.setDesc("Enter your email and we'll send you a sign-in code. New accounts start with 50 free pages.");
+    connectSetting.setDesc("Enter your email and we'll send you a sign-in code. New accounts start with 50 free credits.");
 
     void (async () => {
       try {
