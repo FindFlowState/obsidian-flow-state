@@ -128,12 +128,49 @@ export class FileManager {
   }
 }
 
+// Obsidian augments HTMLElement with DOM helper methods; install equivalents
+// so settings-tab code that uses createDiv/createEl/etc. renders in DOM tests.
+if (typeof document !== 'undefined' && !(HTMLElement.prototype as any).createDiv) {
+  const make = (parent: HTMLElement, tag: string, o?: any): HTMLElement => {
+    const el = document.createElement(tag);
+    if (typeof o === 'string') el.className = o;
+    else if (o) {
+      if (o.cls) el.className = Array.isArray(o.cls) ? o.cls.join(' ') : o.cls;
+      if (o.text != null) el.textContent = String(o.text);
+      if (o.href) el.setAttribute('href', o.href);
+      if (o.attr) for (const [k, v] of Object.entries(o.attr)) el.setAttribute(k, String(v));
+    }
+    parent.appendChild(el);
+    return el;
+  };
+  Object.assign(HTMLElement.prototype, {
+    createEl(tag: string, o?: any) { return make(this as HTMLElement, tag, o); },
+    createDiv(o?: any) { return make(this as HTMLElement, 'div', o); },
+    createSpan(o?: any) { return make(this as HTMLElement, 'span', o); },
+    empty() { (this as HTMLElement).replaceChildren(); },
+    setText(t: string) { (this as HTMLElement).textContent = t; },
+    appendText(t: string) { (this as HTMLElement).appendChild(document.createTextNode(t)); },
+    addClass(...cls: string[]) { (this as HTMLElement).classList.add(...cls); },
+    removeClass(...cls: string[]) { (this as HTMLElement).classList.remove(...cls); },
+    toggleClass(cls: string, on: boolean) { (this as HTMLElement).classList.toggle(cls, on); },
+  });
+}
+
 export class Setting {
   settingEl: HTMLElement = (typeof document !== 'undefined' ? document.createElement('div') : ({} as any));
+  nameEl: HTMLElement = (typeof document !== 'undefined' ? document.createElement('div') : ({} as any));
+  descEl: HTMLElement = (typeof document !== 'undefined' ? document.createElement('div') : ({} as any));
   controlEl: HTMLElement = (typeof document !== 'undefined' ? document.createElement('div') : ({} as any));
-  constructor(_containerEl: HTMLElement) {}
-  setName(_name: string) { return this; }
-  setDesc(_desc: string) { return this; }
+  constructor(containerEl: HTMLElement) {
+    if (containerEl && (containerEl as any).appendChild && (this.settingEl as any).appendChild) {
+      this.settingEl.appendChild(this.nameEl);
+      this.settingEl.appendChild(this.descEl);
+      this.settingEl.appendChild(this.controlEl);
+      containerEl.appendChild(this.settingEl);
+    }
+  }
+  setName(name: string) { if ((this.nameEl as any).appendChild) this.nameEl.textContent = name; return this; }
+  setDesc(desc: string) { if ((this.descEl as any).appendChild) this.descEl.textContent = desc; return this; }
   addText(cb: (t: { setPlaceholder: (s: string) => any; setValue: (v: string) => any; setDisabled: (d: boolean) => any; onChange: (fn: (v: string) => void) => any; inputEl: HTMLInputElement }) => void) {
     const input = (typeof document !== 'undefined' ? document.createElement('input') : ({ style: {} } as any)) as HTMLInputElement;
     const api = {
@@ -175,9 +212,9 @@ export class ButtonComponent {
     this.buttonEl = (typeof document !== 'undefined' ? document.createElement('button') : ({} as any));
     if (container && (container as any).appendChild) (container as any).appendChild(this.buttonEl);
   }
-  setButtonText(_t: string) { return this; }
+  setButtonText(t: string) { if ((this.buttonEl as any).appendChild) this.buttonEl.textContent = t; return this; }
   setCta() { return this; }
-  onClick(_fn: () => void) { return this; }
+  onClick(fn: () => void) { if ((this.buttonEl as any).addEventListener) this.buttonEl.addEventListener('click', fn); return this; }
 }
 
 export class PluginSettingTab {
