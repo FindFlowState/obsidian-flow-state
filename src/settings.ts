@@ -466,7 +466,7 @@ export class FlowStateSettingTab extends PluginSettingTab {
             const creditsDescSetting = new Setting(creditsHost)
               .setDesc(isUnlimited
                 ? "You have an Unlimited plan. Upload as much as you want!"
-                : "Each page or minute of audio that you upload uses one credit. You get 50 free credits to get started. Need more? Upgrade your plan or buy top-ups.");
+                : "Each page or minute of audio that you upload uses one credit. You get 25 free credits to get started. Need more? Buy a top-up pack — credits never expire.");
             creditsDescSetting.settingEl.addClass("fs-setting-flush");
             creditsDescSetting.addButton((b) =>
               b.setCta()
@@ -482,15 +482,19 @@ export class FlowStateSettingTab extends PluginSettingTab {
                 .setDesc(String(total));
               totalSetting.settingEl.addClass("fs-credit-row");
 
-              const subscriptionSetting = new Setting(creditsHost)
-                .setName("Subscription Credits")
-                .setDesc(`${credits.subscription_credits ?? 0} (rolls over while subscribed)`);
-              subscriptionSetting.settingEl.addClass("fs-credit-row");
+              // Subscriptions are no longer sold; only show the split for
+              // grandfathered subscribers who still hold subscription credits.
+              if ((credits.subscription_credits ?? 0) > 0) {
+                const subscriptionSetting = new Setting(creditsHost)
+                  .setName("Subscription Credits")
+                  .setDesc(`${credits.subscription_credits ?? 0} (rolls over while subscribed)`);
+                subscriptionSetting.settingEl.addClass("fs-credit-row");
 
-              const topupSetting = new Setting(creditsHost)
-                .setName("Top-up Credits")
-                .setDesc(`${credits.purchased_credits ?? 0} (never expire)`);
-              topupSetting.settingEl.addClass("fs-credit-row");
+                const topupSetting = new Setting(creditsHost)
+                  .setName("Top-up Credits")
+                  .setDesc(`${credits.purchased_credits ?? 0} (never expire)`);
+                topupSetting.settingEl.addClass("fs-credit-row");
+              }
             }
           }
         } catch (creditsErr) {
