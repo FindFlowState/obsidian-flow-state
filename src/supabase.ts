@@ -495,9 +495,7 @@ export async function deleteRoute(
 
 // -------- User credits helpers --------
 export type UserCredits = {
-  subscription_credits: number;
   purchased_credits: number;
-  subscription_plan: string;
 };
 
 export async function fetchUserCredits(
@@ -510,7 +508,7 @@ export async function fetchUserCredits(
 
   const { data, error } = await supabase
     .from("users")
-    .select("subscription_credits, purchased_credits, subscription_plan")
+    .select("purchased_credits")
     .eq("id", uid)
     .single();
 

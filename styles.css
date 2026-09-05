@@ -41,7 +41,6 @@
 .fs-archive-btn { background: transparent; border: 1px solid var(--text-muted); color: var(--text-normal); }
 .fs-credit-row { border-top: none; padding: 6px 0; }
 .fs-credits-badge { font-size: 0.85em; color: var(--text-muted); margin-left: 8px; }
-.fs-badge-accent { color: var(--interactive-accent); }
 
 /* ---- Note properties (front matter) editor ---- */
 .fs-fm-body { margin-top: 6px; }

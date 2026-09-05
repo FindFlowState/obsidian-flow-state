@@ -451,22 +451,14 @@ export class FlowStateSettingTab extends PluginSettingTab {
           creditsHost.empty();
 
           if (credits) {
-            const isUnlimited = credits.subscription_plan === "unlimited";
-            const total = (credits.subscription_credits ?? 0) + (credits.purchased_credits ?? 0);
+            const total = credits.purchased_credits ?? 0;
 
             // Update collapsed header badge
-            if (isUnlimited) {
-              creditsBadge.setText("(Unlimited)");
-              creditsBadge.addClass("fs-badge-accent");
-            } else {
-              creditsBadge.setText(`(${total})`);
-            }
+            creditsBadge.setText(`(${total})`);
 
             // Explanation text with Manage Credits button
             const creditsDescSetting = new Setting(creditsHost)
-              .setDesc(isUnlimited
-                ? "You have an Unlimited plan. Upload as much as you want!"
-                : "Each page or minute of audio that you upload uses one credit. You get 25 free credits to get started. Need more? Buy a top-up pack — credits never expire.");
+              .setDesc("Each page or minute of audio that you upload uses one credit. You get 25 free credits to get started. Need more? Buy a top-up pack — credits never expire.");
             creditsDescSetting.settingEl.addClass("fs-setting-flush");
             creditsDescSetting.addButton((b) =>
               b.setCta()
@@ -476,26 +468,10 @@ export class FlowStateSettingTab extends PluginSettingTab {
                 })
             );
 
-            if (!isUnlimited) {
-              const totalSetting = new Setting(creditsHost)
-                .setName("Total Credits")
-                .setDesc(String(total));
-              totalSetting.settingEl.addClass("fs-credit-row");
-
-              // Subscriptions are no longer sold; only show the split for
-              // grandfathered subscribers who still hold subscription credits.
-              if ((credits.subscription_credits ?? 0) > 0) {
-                const subscriptionSetting = new Setting(creditsHost)
-                  .setName("Subscription Credits")
-                  .setDesc(`${credits.subscription_credits ?? 0} (rolls over while subscribed)`);
-                subscriptionSetting.settingEl.addClass("fs-credit-row");
-
-                const topupSetting = new Setting(creditsHost)
-                  .setName("Top-up Credits")
-                  .setDesc(`${credits.purchased_credits ?? 0} (never expire)`);
-                topupSetting.settingEl.addClass("fs-credit-row");
-              }
-            }
+            const totalSetting = new Setting(creditsHost)
+              .setName("Total Credits")
+              .setDesc(String(total));
+            totalSetting.settingEl.addClass("fs-credit-row");
           }
         } catch (creditsErr) {
           // Bail out if a newer display() was called
