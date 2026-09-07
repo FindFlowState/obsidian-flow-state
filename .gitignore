@@ -13,5 +13,9 @@ node_modules/
 dist/
 output/
 
+# Build output mirrored to the root for the community review bot (see scripts/build.mjs)
+/main.js
+/main.js.map
+
 #Plugin
 data.json

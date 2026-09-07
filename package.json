@@ -22,8 +22,8 @@
     "@types/node": "^20.12.7",
     "esbuild": "^0.21.5",
     "eslint": "^9.39.4",
-    "eslint-plugin-obsidianmd": "^0.3.0",
-    "obsidian": "^1.5.8",
+    "eslint-plugin-obsidianmd": "^0.4.2",
+    "obsidian": "^1.12.3",
     "typescript": "^5.4.5",
     "typescript-eslint": "^8.61.1",
     "vitest": "^1.6.0"
@@ -31,7 +31,6 @@
   "dependencies": {
     "@sentry/browser": "^10.37.0",
     "@supabase/supabase-js": "^2.108.2",
-    "jspdf": "^4.2.1",
     "mustache": "^4.2.0",
     "qrcode-generator": "^2.0.4",
     "sanitize-filename": "^1.6.3"

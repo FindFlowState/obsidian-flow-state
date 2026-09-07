@@ -150,12 +150,12 @@ export class FlowStateSettingTab extends PluginSettingTab {
     containerEl.addClass("fs-settings-tab");
 
     // Flowstate title (plain text, styled like other plugins)
-    containerEl.createEl("div", { text: "Flowstate", cls: "fs-settings-title" });
+    containerEl.createDiv({ text: "Flowstate", cls: "fs-settings-title" });
 
     // Intro text with Learn more link on same line. "Learn more" reopens the
     // welcome screen — it's an ephemeral view, so this is the only way back to
     // it once the tab is closed (the site link lives at the foot of that screen).
-    const intro = containerEl.createEl("div", { cls: "fs-intro" });
+    const intro = containerEl.createDiv({ cls: "fs-intro" });
     intro.appendText("Your handwriting and voice, transcribed and filed in Obsidian. ");
     const learnMore = intro.createEl("a", { text: "Learn more →", href: "#", cls: "fs-muted-link" });
     learnMore.addEventListener("click", (e) => {
