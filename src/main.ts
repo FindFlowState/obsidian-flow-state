@@ -2,14 +2,14 @@ import { Notice, Platform, Plugin, normalizePath, requestUrl, TFile } from "obsi
 import type { Job, Route } from "./types";
 import { FlowStateSettingTab, PluginSettings, DEFAULT_SETTINGS } from "./settings";
 import { getSupabase, createDataJsonAuthStorage, exchangeFromObsidianParams, fetchRouteById, ensureObsidianConnection, updateRoute } from "./supabase";
-import { DEFAULT_SUPABASE_URL, DEFAULT_SUPABASE_ANON_KEY } from "./config";
+import { DEFAULT_SUPABASE_URL, DEFAULT_SUPABASE_ANON_KEY, isAdminEmail } from "./config";
 import { ensureFolder, atomicWrite, writeBinaryToAttachments, buildSafeNoteFilename } from "./fs";
 import { parseFrontMatterConfig, resolveFrontMatter } from "./content";
 import { downloadFromStorage } from "./storage";
 import { log, warn, error, errorMessage } from "./logger";
 import { initSentry, captureException } from "./sentry";
 import { OnboardingModal } from "./onboarding";
-import { runFirstSignInSetup, firstDeliveryNoticeText, deliveryNoticeText } from "./firstRun";
+import { runFirstSignInSetup, openWelcomeScreenNow, firstDeliveryNoticeText, deliveryNoticeText } from "./firstRun";
 import { WelcomeView, WELCOME_VIEW_TYPE } from "./welcomeView";
 import { openUploadModal } from "./uploadModal";
 
@@ -61,7 +61,7 @@ export default class FlowStatePlugin extends Plugin {
 
     // Welcome screen view (ephemeral — shows what a delivered note looks like
     // without writing anything to the vault)
-    this.registerView(WELCOME_VIEW_TYPE, (leaf) => new WelcomeView(leaf));
+    this.registerView(WELCOME_VIEW_TYPE, (leaf) => new WelcomeView(leaf, this));
 
     // Commands
     this.addCommand({
@@ -77,31 +77,42 @@ export default class FlowStatePlugin extends Plugin {
         const supabase = getSupabase(this.settings);
         const { data: { session } } = await supabase.auth.getSession();
         if (!session) {
-          new Notice('Flowstate: sign in first — run "Flowstate: Get started" or open Settings → Flowstate.');
+          new Notice("Flowstate: sign in first — open Settings → Flowstate.");
           return;
         }
         openUploadModal(this.app, this);
       },
     });
 
+    // Dev-only: replay first-run onboarding on demand. Hidden from the command
+    // palette unless an admin account has signed in on this vault
+    // (settings.isAdmin, refreshed on every sign-in) — normal users reach
+    // sign-in through Settings → Flowstate and the once-only intro modal.
+    // Dev-only: replay the whole first-run sequence, intro modal through
+    // welcome screen. Hidden from the command palette unless an admin account
+    // (settings.isAdmin) has signed in on this vault.
     this.addCommand({
-      id: "get-started",
-      name: "Get started",
-      callback: async () => {
-        const supabase = getSupabase(this.settings);
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session) {
-          // Already signed in: the useful "get started" surface is settings
-          try {
-            const setting = (this.app as unknown as { setting: ObsidianSettingApi }).setting;
-            await setting.open();
-            setting.openTabById(this.manifest.id);
-          } catch (e: unknown) {
-            error("Failed to open settings", e);
-          }
-        } else {
-          this.openOnboarding();
-        }
+      id: "onboarding-dev",
+      name: "Onboarding (dev)",
+      checkCallback: (checking: boolean) => {
+        if (!this.settings.isAdmin) return false;
+        if (checking) return true;
+        void this.replayOnboarding();
+        return true;
+      },
+    });
+
+    // Dev-only: jump straight to the welcome screen. The full replay above goes
+    // through sign-in; this skips it, so the screen (and the sample link on it)
+    // can be checked repeatedly without signing out and back in.
+    this.addCommand({
+      id: "onboarding-dev-welcome",
+      name: "Onboarding (dev): welcome screen",
+      checkCallback: (checking: boolean) => {
+        if (!this.settings.isAdmin) return false;
+        if (checking) return true;
+        void openWelcomeScreenNow(this);
+        return true;
       },
     });
 
@@ -109,6 +120,7 @@ export default class FlowStatePlugin extends Plugin {
     this.app.workspace.onLayoutReady(() => {
       void (async () => {
         try {
+          await this.refreshAdminFlag();
           if (this.settings.onboardingDismissed) return;
           const supabase = getSupabase(this.settings);
           const { data: { session } } = await supabase.auth.getSession();
@@ -496,6 +508,63 @@ export default class FlowStatePlugin extends Plugin {
     }
   }
 
+  /**
+   * Recompute whether this vault has a dev/admin account signed in, which is
+   * what exposes the "Onboarding (dev)" command. Sticky across sign-out (a
+   * signed-out session leaves the flag as-is) so the replay stays reachable
+   * for exactly the case it exists for: testing the signed-out intro.
+   */
+  async refreshAdminFlag(): Promise<void> {
+    try {
+      const supabase = getSupabase(this.settings);
+      const { data: { session } } = await supabase.auth.getSession();
+      const email = session?.user?.email ?? null;
+      if (!email) return;
+      const isAdmin = isAdminEmail(email);
+      if (this.settings.isAdmin === isAdmin) return;
+      this.settings.isAdmin = isAdmin;
+      await this.saveSettings();
+    } catch (e) {
+      warn("refreshAdminFlag failed", e);
+    }
+  }
+
+  /**
+   * Dev-only: replay the entire first-run sequence from the top — intro modal,
+   * sign-in, sample-note offer, welcome screen.
+   *
+   * The two halves are joined by settings.devReplayPending rather than by
+   * awaiting anything, because sign-in may leave Obsidian entirely (magic link)
+   * and come back through the deep-link handler. handleSignedIn reads that flag
+   * and forces the post-sign-in half to run even though the vault already has
+   * flows; runOnboardingTail covers the already-signed-in case, where the modal
+   * closes without a sign-in to trigger it.
+   */
+  async replayOnboarding(): Promise<void> {
+    this.settings.onboardingDismissed = false;
+    this.settings.starterSetupUsers = [];
+    this.settings.firstSyncNoticeShown = false;
+    this.settings.devReplayPending = true;
+    await this.saveSettings();
+    this.openOnboarding();
+  }
+
+  /**
+   * Run the post-sign-in half of a dev replay (sample note + welcome screen)
+   * and clear the pending flag. No-op unless a replay is actually in flight.
+   */
+  async runOnboardingTail(): Promise<void> {
+    if (!this.settings.devReplayPending) return;
+    const supabase = getSupabase(this.settings);
+    const { data: { session } } = await supabase.auth.getSession();
+    // Still signed out: the replay is waiting on a sign-in that may yet arrive
+    // through the deep-link handler, so leave the flag set for handleSignedIn.
+    if (!session) return;
+    this.settings.devReplayPending = false;
+    await this.saveSettings();
+    await runFirstSignInSetup(this, { force: true });
+  }
+
   /** Open the first-run onboarding modal (no-op if already open). */
   openOnboarding(): void {
     if (this.onboardingModal) return;
@@ -506,7 +575,7 @@ export default class FlowStatePlugin extends Plugin {
   /**
    * Shared completion path for every sign-in route (emailed code, magic link
    * deep link): refresh this vault's connection, run first-sign-in setup
-   * (starter flow + welcome note), close the onboarding modal if it's open,
+   * (starter flow + sample note offer), close the onboarding modal if it's open,
    * and re-render settings.
    */
   async handleSignedIn(): Promise<void> {
@@ -517,7 +586,15 @@ export default class FlowStatePlugin extends Plugin {
     } catch (e) {
       warn("handleSignedIn: failed to ensure vault connection", e);
     }
-    await runFirstSignInSetup(this);
+    await this.refreshAdminFlag();
+    // A dev replay forces the first-run step past the "this vault already has
+    // flows" check; a normal sign-in leaves that check in place.
+    const devReplay = this.settings.devReplayPending === true;
+    if (devReplay) {
+      this.settings.devReplayPending = false;
+      await this.saveSettings();
+    }
+    await runFirstSignInSetup(this, { force: devReplay });
     if (this.onboardingModal) {
       this.onboardingModal.markCompleted();
       this.onboardingModal.close();

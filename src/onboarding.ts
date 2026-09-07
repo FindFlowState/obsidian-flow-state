@@ -37,12 +37,16 @@ export class OnboardingModal extends Modal {
   onClose(): void {
     this.contentEl.empty();
     if (this.plugin.onboardingModal === this) this.plugin.onboardingModal = null;
-    // One showing is enough: don't nag on every launch. The settings tab and
-    // the "Get started" command keep sign-up available.
+    // One showing is enough: don't nag on every launch. The settings tab keeps
+    // sign-up available (the onboarding command is dev-only).
     if (!this.completed && !this.plugin.settings.onboardingDismissed) {
       this.plugin.settings.onboardingDismissed = true;
       void this.plugin.saveData(this.plugin.settings);
     }
+    // Dev replay by an already-signed-in admin: no sign-in fires here to carry
+    // the sequence on, so continue into the second half from the close instead.
+    // A no-op when sign-in already ran it, or while still signed out.
+    if (!this.completed) void this.plugin.runOnboardingTail();
   }
 
   private render(): void {
@@ -53,17 +57,19 @@ export class OnboardingModal extends Modal {
   }
 
   private renderIntro(titleEl: HTMLElement, contentEl: HTMLElement): void {
-    titleEl.setText("Your handwriting, transcribed into your vault");
+    titleEl.setText("Flowstate");
 
-    contentEl.createEl("p", {
-      text: "Flowstate transcribes handwritten pages and voice memos and files them in Obsidian as clean, searchable markdown.",
-      cls: "fs-ob-tagline",
-    });
+    // "Flowstate" links to the site — the same treatment the welcome note's
+    // opening line uses. (The in-app welcome screen isn't reachable here: the
+    // user is signed out.)
+    const tagline = contentEl.createEl("p", { cls: "fs-ob-tagline" });
+    tagline.createEl("a", { text: "Flowstate", href: "https://seekflowstate.com" });
+    tagline.appendText(" turns handwriting and voice into text files, and saves them automatically to your Vault.");
 
     const steps: Array<{ title: string; body: string }> = [
-      { title: "Write or record", body: "On paper, an e-ink tablet, or out loud as a voice memo." },
-      { title: "Capture it", body: "Snap it with the Flowstate app, or email it from your reMarkable, Boox, or Supernote." },
-      { title: "It lands here", body: "Transcribed, formatted, and filed in your vault." },
+      { title: "Write by hand, or record your voice", body: "Use pen & paper, e-ink tablets, or talk out loud" },
+      { title: "Share it with Flowstate", body: "Upload a file, send in an email, or use the Flowstate app" },
+      { title: "See notes saved to your Vault, automatically", body: "Flowstate transcribes and saves them exactly where you want" },
     ];
     const list = contentEl.createDiv({ cls: "fs-ob-steps" });
     steps.forEach((s, i) => {
@@ -75,8 +81,8 @@ export class OnboardingModal extends Modal {
     });
 
     contentEl.createEl("p", {
-      text: "Your first 50 credits are free. No card, no catch. Top up your credits anytime.",
-      cls: "fs-ob-credits",
+      text: "Enter your email to get a login code",
+      cls: "fs-ob-signin-label",
     });
 
     const row = contentEl.createDiv({ cls: "fs-ob-email-row" });
@@ -94,10 +100,6 @@ export class OnboardingModal extends Modal {
     cta.setCta().setButtonText("Get started");
     cta.onClick(() => void this.sendCode());
     window.setTimeout(() => input.focus(), 0);
-
-    const later = contentEl.createDiv({ cls: "fs-ob-later" });
-    const link = later.createEl("a", { text: "Maybe later", cls: "fs-muted-link" });
-    link.addEventListener("click", (e) => { e.preventDefault(); this.close(); });
   }
 
   private renderCode(titleEl: HTMLElement, contentEl: HTMLElement): void {

@@ -2,6 +2,7 @@ import { App, PluginSettingTab, Setting, Notice, ButtonComponent } from "obsidia
 import type FlowStatePlugin from "./main";
 import type { Route } from "./types";
 import { DEFAULT_SUPABASE_URL, DEFAULT_SUPABASE_ANON_KEY } from "./config";
+import { openWelcomeScreenNow } from "./firstRun";
 import { getSupabase, getCurrentSession, signOut as supaSignOut, sendMagicLink, verifyEmailOtp, listObsidianRoutes, listRecentJobs, deleteRoute, fetchRouteById, fetchUserCredits } from "./supabase";
 import { formatRelativeTime } from "./time";
 import { GetAppModal } from "./getAppModal";
@@ -27,6 +28,14 @@ export type PluginSettings = {
   starterSetupUsers?: string[];
   // The one-time "your first note just landed" notice was already shown
   firstSyncNoticeShown?: boolean;
+  // An admin/dev account (see ADMIN_EMAILS) has signed in on this vault, so
+  // the dev-only command is exposed. Recomputed on every sign-in, and kept
+  // across sign-out so the onboarding replay is reachable while signed out.
+  isAdmin?: boolean;
+  // A dev onboarding replay is mid-flight. Persisted because the magic-link
+  // route leaves Obsidian and comes back, and the post-sign-in half has to know
+  // it should still run even in a vault that already has flows.
+  devReplayPending?: boolean;
 };
 
 export const DEFAULT_SETTINGS: PluginSettings = {
@@ -37,10 +46,29 @@ export const DEFAULT_SETTINGS: PluginSettings = {
   authStore: {},
   onboardingDismissed: false,
   starterSetupUsers: [],
-  firstSyncNoticeShown: false
+  firstSyncNoticeShown: false,
+  isAdmin: false,
+  devReplayPending: false
 };
 
+type SettingsTab = "capture" | "flows" | "history";
+
+const SETTINGS_TABS: { id: SettingsTab; label: string }[] = [
+  { id: "capture", label: "Capture" },
+  { id: "flows", label: "Flows" },
+  { id: "history", label: "History" },
+];
+
 export class FlowStateSettingTab extends PluginSettingTab {
+  // Which top-level tab of the settings pane is showing. Capture leads: it's
+  // what a new user needs first, and the only part that works before any flow
+  // exists. Instance state, so it survives the display() re-render on switch.
+  private activeTab: SettingsTab = "capture";
+  // Credits for this pane opening. undefined = not fetched yet; null = fetched,
+  // no data. Switching tabs re-renders via display(), so without this the
+  // balance would be refetched on every tab click; hide() clears it so the next
+  // time the pane is opened we go back to the server.
+  private creditsCache: Awaited<ReturnType<typeof fetchUserCredits>> | undefined = undefined;
   // undefined -> list view; null -> new project; Route -> edit existing
   private editingRoute: Route | null | undefined = undefined;
   // Email we sent a sign-in code to; non-null renders the "enter code" state
@@ -74,6 +102,12 @@ export class FlowStateSettingTab extends PluginSettingTab {
   openNewProject(): void {
     this.editingRoute = null;
     this.display();
+  }
+
+  hide(): void {
+    // Next opening of the pane should show a fresh balance
+    this.creditsCache = undefined;
+    super.hide();
   }
 
   display(): void {
@@ -112,14 +146,40 @@ export class FlowStateSettingTab extends PluginSettingTab {
     }
 
     containerEl.empty();
+    // Scopes our settings-tab overrides so they can't leak into other plugins' tabs
+    containerEl.addClass("fs-settings-tab");
 
     // Flowstate title (plain text, styled like other plugins)
     containerEl.createEl("div", { text: "Flowstate", cls: "fs-settings-title" });
 
-    // Intro text with Learn more link on same line
+    // Intro text with Learn more link on same line. "Learn more" reopens the
+    // welcome screen — it's an ephemeral view, so this is the only way back to
+    // it once the tab is closed (the site link lives at the foot of that screen).
     const intro = containerEl.createEl("div", { cls: "fs-intro" });
     intro.appendText("Your handwriting and voice, transcribed and filed in Obsidian. ");
-    intro.createEl("a", { text: "Learn more →", href: "https://seekflowstate.com", cls: "fs-muted-link" });
+    const learnMore = intro.createEl("a", { text: "Learn more →", href: "#", cls: "fs-muted-link" });
+    learnMore.addEventListener("click", (e) => {
+      e.preventDefault();
+      void (async () => {
+        // The welcome screen describes an account that exists — the starter
+        // flow, the flow's email address, a sample note it can write — so it's
+        // only shown once signed in. Signed out, this link means what it does
+        // in the onboarding modal: the website.
+        const supabase = getSupabase(this.settings);
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) {
+          window.open("https://seekflowstate.com", "_blank");
+          return;
+        }
+        // The welcome screen opens in a workspace tab behind this modal, so
+        // close settings or the user never sees it (same pattern as the
+        // recent-uploads rows below).
+        try {
+          (this.app as unknown as { setting: { close(): void } }).setting.close();
+        } catch { /* best-effort */ }
+        await openWelcomeScreenNow(this.plugin);
+      })();
+    });
 
     // How it works bullets (will be hidden when signed in)
     const bulletsSection = containerEl.createDiv({ cls: "fs-onboarding-bullets" });
@@ -146,7 +206,7 @@ export class FlowStateSettingTab extends PluginSettingTab {
     const authSection = containerEl.createDiv();
     const connectSetting = new Setting(authSection)
       .setName("Sign up or sign in");
-    connectSetting.setDesc("Enter your email and we'll send you a sign-in code. New accounts start with 50 free credits.");
+    connectSetting.setDesc("Enter your email and we'll send you a sign-in code. New accounts start with 25 free credits.");
 
     void (async () => {
       try {
@@ -210,8 +270,12 @@ export class FlowStateSettingTab extends PluginSettingTab {
           // Fill the credits chip (breakdown lives in the hover title; full
           // management is in the web app)
           try {
-            const credits = await fetchUserCredits(supabase);
-            if (this.displayGeneration !== generation) return;
+            let credits = this.creditsCache;
+            if (credits === undefined) {
+              credits = await fetchUserCredits(supabase);
+              if (this.displayGeneration !== generation) return;
+              this.creditsCache = credits;
+            }
             if (credits) {
               if (credits.subscription_plan === "unlimited") {
                 creditsChip.setText("Unlimited");
@@ -365,24 +429,32 @@ export class FlowStateSettingTab extends PluginSettingTab {
           return;
         }
 
-        // Capture section — how notes get INTO Flowstate (the part that
-        // happens outside Obsidian). Always visible, native heading.
-        new Setting(containerEl).setName("Capture").setHeading();
-        const captureBody = containerEl.createDiv();
+        // Top-level tabs. Every section still renders (and fetches) as before;
+        // the inactive ones are just hidden, which keeps the interleaved async
+        // flow below untouched. The tab label replaces each section's heading.
+        const tabBar = containerEl.createDiv({ cls: "fs-tabs" });
+        for (const tab of SETTINGS_TABS) {
+          const btn = tabBar.createEl("button", { cls: "fs-tab", text: tab.label });
+          if (this.activeTab === tab.id) {
+            btn.addClass("fs-tab-active");
+            btn.setAttribute("aria-current", "page");
+          }
+          btn.addEventListener("click", () => {
+            if (this.activeTab === tab.id) return;
+            this.activeTab = tab.id;
+            this.display();
+          });
+        }
+        const captureHost = containerEl.createDiv();
+        const flowsHost = containerEl.createDiv();
+        const historyHost = containerEl.createDiv();
+        if (this.activeTab !== "capture") captureHost.addClass("fs-hidden");
+        if (this.activeTab !== "flows") flowsHost.addClass("fs-hidden");
+        if (this.activeTab !== "history") historyHost.addClass("fs-hidden");
 
-        const captureIntro = captureBody.createDiv({ cls: "setting-item-description fs-capture-intro" });
-        captureIntro.setText("Capture from your phone, by email (each flow has its own address — see its Email Options), or upload right here. Transcriptions land back in this vault on their own.");
-
-        // Mobile app row — QR + links live in a modal behind the button
-        const appSetting = new Setting(captureBody)
-          .setName("Flowstate app")
-          .setDesc("Snap handwritten pages or record voice memos, then send them straight to this vault.");
-        appSetting.settingEl.addClass("fs-setting-flush");
-        appSetting.addButton((b) =>
-          b.setButtonText("Get the app").onClick(() => {
-            new GetAppModal(this.app).open();
-          })
-        );
+        // Capture — how notes get INTO Flowstate (the part that happens
+        // outside Obsidian).
+        const captureBody = captureHost.createDiv();
 
         // Upload row — capture directly from Obsidian
         const uploadSetting = new Setting(captureBody)
@@ -395,13 +467,23 @@ export class FlowStateSettingTab extends PluginSettingTab {
           })
         );
 
-        // Flows section — always visible, native heading
-        new Setting(containerEl).setName("Flows").setHeading();
-        const projectsBody = containerEl.createDiv();
+        // Mobile app row — QR + links live in a modal behind the button
+        const appSetting = new Setting(captureBody)
+          .setName("Flowstate app")
+          .setDesc("Snap handwritten pages or record voice memos, then send them straight to this vault.");
+        appSetting.settingEl.addClass("fs-setting-flush");
+        appSetting.addButton((b) =>
+          b.setButtonText("Get the app").onClick(() => {
+            new GetAppModal(this.app).open();
+          })
+        );
+
+        // Flows
+        const projectsBody = flowsHost.createDiv();
 
         // Flows description and buttons
         const header = new Setting(projectsBody)
-          .setDesc("Flows describe how to transcribe and save your uploads.");
+          .setDesc("Flows let you choose how to transcribe different types of notes and where to save them.");
         header.settingEl.addClass("fs-setting-flush");
         header.addButton((b) =>
           b.setButtonText("Refresh").onClick(() => this.display())
@@ -537,10 +619,9 @@ export class FlowStateSettingTab extends PluginSettingTab {
         // Recent uploads — a tiny status strip, not a history view. Shows the
         // last few jobs (in-flight, delivered, failed); everything older
         // lives in the web app.
-        new Setting(containerEl).setName("Recent uploads").setHeading();
-        const recentHost = containerEl.createDiv({ cls: "fs-recent-list" });
+        const recentHost = historyHost.createDiv({ cls: "fs-recent-list" });
         recentHost.createDiv({ text: "Loading…", cls: "setting-item-description" });
-        const historyLinkRow = containerEl.createDiv({ cls: "fs-history-link" });
+        const historyLinkRow = historyHost.createDiv({ cls: "fs-history-link" });
         const historyLink = historyLinkRow.createEl("a", {
           text: "Full history in the web app →",
           cls: "fs-muted-link",

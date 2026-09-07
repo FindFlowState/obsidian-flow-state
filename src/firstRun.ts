@@ -1,39 +1,76 @@
-import { normalizePath } from "obsidian";
+import { normalizePath, type App } from "obsidian";
 import type FlowStatePlugin from "./main";
 import type { Route } from "./types";
 import { getSupabase, listObsidianRoutes, createProject, fetchUserHandle } from "./supabase";
 import { DEFAULT_INGEST_EMAIL_DOMAIN } from "./config";
 import { computeFlowEmail } from "./email";
 import { WELCOME_VIEW_TYPE } from "./welcomeView";
-import { SampleNoteModal } from "./sampleNoteModal";
-import { WELCOME_PDF_BASE64 } from "./welcomePdf";
-import { ensureFolder, atomicWrite, writeBinaryToAttachments } from "./fs";
+import { SAMPLE_PDF_BASE64 } from "./samplePdf";
+import { atomicWrite, writeBinaryToAttachments } from "./fs";
 import { log, warn } from "./logger";
 
 export const STARTER_FLOW_NAME = "Inbox";
+/**
+ * Folder the starter "Inbox" flow delivers into. Deliveries are ongoing, so
+ * they get their own folder rather than the vault root. Referenced by the
+ * welcome copy below too, so the two can't drift apart.
+ *
+ * (The one-off sample note is deliberately different — it goes to the vault
+ * root, where the user will actually see it.)
+ */
 export const STARTER_FOLDER = "Flowstate";
-export const SAMPLE_NOTE_TITLE = "Welcome to Flowstate";
+export const SAMPLE_NOTE_TITLE = "Where Lorem Ipsum comes from";
 
 /**
- * The transcription of the handwritten welcome letter (assets/
- * welcome-sample.pdf) — the two must say the same thing, so regenerate the
- * PDF if this changes. Formatted exactly like a real delivery: body text,
- * then the embedded original underneath.
+ * Href of the "add a sample note" action in the welcome screen. Not a real URL —
+ * WelcomeView finds this link after rendering and swaps its paragraph for a
+ * proper CTA card, falling back to a plain clickable link if that ever fails.
+ */
+export const SAMPLE_ACTION_HREF = "flowstate:add-sample";
+
+/**
+ * Copy for the sample-note CTA card (built as DOM in welcomeView.ts, so it
+ * can't live in the markdown above).
+ *
+ * ⚠️ User-facing copy — follow the Flowstate voice guides before editing.
+ */
+export const SAMPLE_CTA = {
+  body: "We wrote you a real handwritten page, so you can see what it looks like in your Vault.",
+  button: "See a sample note",
+  doneBody: "Added a sample note to your vault.",
+  doneButton: "Open it",
+} as const;
+
+/** Href of the "upload a file" link in the welcome screen — opens the plugin's upload modal. */
+export const UPLOAD_ACTION_HREF = "flowstate:upload";
+
+/** Href that opens this plugin's settings tab, rather than telling the user where to click. */
+export const SETTINGS_ACTION_HREF = "flowstate:settings";
+
+/** Support address, offered as click-to-copy rather than a mailto: link. */
+export const SUPPORT_EMAIL = "brothers@seekflowstate.com";
+
+/**
+ * The transcription of the handwritten sample page
+ * (assets/sample-handwriting.pdf) — the same page the web and mobile
+ * onboarding transcribe, so the three surfaces show the same note. The two
+ * must say the same thing: re-transcribe if the image is replaced.
+ *
+ * Formatted exactly like a real delivery: body text, then the embedded
+ * original underneath.
  *
  * ⚠️ User-facing copy — follow the Flowstate voice guides before editing.
  */
 export function sampleNoteContent(attachmentPath: string): string {
-  return `If you can read this, everything worked — this page started as ink on paper.
+  return `I was going to write Lorem Ipsum here 47 times like they do for filler copy, but then I thought — "huh, where does Lorem Ipsum even come from?" So I looked it up.
 
-Write on paper. Capture it with the Flowstate app, or email it from your e-ink tablet. A minute later it lands in your vault as clean, searchable text — filed wherever you told it to go.
+- It comes from Cicero in ancient Rome, almost 2000 years ago.
+- Lorem Ipsum are two first words of a book he wrote.
+- Or actually, it's a truncation of the first two words — "dolorem ipsum" — which means "pain itself." No wonder they use it to describe writing!
 
-The words stay yours. Flowstate just does the typing.
+Hope you enjoyed this little tidbit and the rest of Flowstate. We made it for writers, thinkers, notetakers, and people like us who just want to feel a little bit more human again!
 
-You have 50 free credits — one page of handwriting or one minute of audio each.
-
-Go scribble something.
-
-— Raj and Rob
+— Raj
 
 ![[${attachmentPath}]]
 `;
@@ -47,66 +84,114 @@ function base64ToBytes(b64: string): Uint8Array {
 }
 
 /**
- * Write the sample note + handwritten PDF into the vault (the user opted in
- * via SampleNoteModal — never call this without that consent). Returns the
+ * Write the sample note + handwritten page into the vault (the user opted in
+ * by clicking the sample link in the welcome screen — never call this without
+ * that consent). Returns the
  * note's path.
  */
-export async function installSampleNote(plugin: FlowStatePlugin): Promise<string> {
-  const app = plugin.app;
-  await ensureFolder(app, STARTER_FOLDER);
+export async function installSampleNote(app: App): Promise<string> {
+  // No baseFolder: this is the exact call a real delivery makes
+  // (see maybeDownloadOriginal in main.ts), so the PDF lands in the user's
+  // configured attachment folder and is linked from the note the same way.
   const pdfPath = await writeBinaryToAttachments(
     app,
     `${SAMPLE_NOTE_TITLE}.pdf`,
-    base64ToBytes(WELCOME_PDF_BASE64),
-    { baseFolder: STARTER_FOLDER }
+    base64ToBytes(SAMPLE_PDF_BASE64)
   );
-  const notePath = normalizePath(`${STARTER_FOLDER}/${SAMPLE_NOTE_TITLE}.md`);
+  // Vault root, not the flow's folder: the sample is a demo, not a delivery,
+  // and burying it in a folder the user hasn't opened yet hides the payoff.
+  const notePath = normalizePath(`${SAMPLE_NOTE_TITLE}.md`);
   await atomicWrite(app, notePath, sampleNoteContent(pdfPath));
   log("firstRun: sample note installed", { notePath, pdfPath });
   return notePath;
 }
 
 /** Open the ephemeral welcome view (no vault writes). */
-export async function openWelcomeView(plugin: FlowStatePlugin, flowEmail: string | null): Promise<void> {
+export async function openWelcomeView(
+  plugin: FlowStatePlugin,
+  flowEmail: string | null,
+  sampleAdded = false
+): Promise<void> {
   const leaf = plugin.app.workspace.getLeaf(true);
-  await leaf.setViewState({ type: WELCOME_VIEW_TYPE, active: true, state: { flowEmail } });
+  await leaf.setViewState({ type: WELCOME_VIEW_TYPE, active: true, state: { flowEmail, sampleAdded } });
 }
 
 /**
- * The welcome screen shown right after first sign-in, formatted the way a
- * real transcription lands so the user sees the end state before they've
- * captured anything. Rendered in an ephemeral view (see welcomeView.ts) —
- * it is never written to the vault.
+ * Open the welcome screen on its own, resolving the flow email if a session is
+ * available. Used by the dev command so the screen can be reviewed without
+ * signing out and back in; harmless if signed out (the email bullet is simply
+ * omitted).
+ */
+export async function openWelcomeScreenNow(plugin: FlowStatePlugin): Promise<void> {
+  let flowEmail: string | null = null;
+  try {
+    const supabase = getSupabase(plugin.settings);
+    const handle = await fetchUserHandle(supabase);
+    const connectionId = await plugin.getMyConnectionId();
+    const routes = connectionId ? await listObsidianRoutes(supabase, connectionId) : [];
+    flowEmail = computeFlowEmail(handle, routes[0]?.slug, DEFAULT_INGEST_EMAIL_DOMAIN);
+  } catch (e) {
+    warn("openWelcomeScreenNow: could not resolve flow email", e);
+  }
+  await openWelcomeView(plugin, flowEmail);
+}
+
+/**
+ * The welcome screen shown right after first sign-in — every time, whether or
+ * not the user took the sample note. It carries the getting-started
+ * information (the sample note is just a fun optional demo). Formatted the way
+ * a real transcription lands so the user sees the end state before they've
+ * captured anything. Rendered in an ephemeral view (see welcomeView.ts) — it
+ * is never written to the vault.
  *
  * ⚠️ User-facing copy — follow the Flowstate voice guides before editing.
  */
-export function welcomeNoteContent(flowEmail: string | null): string {
+export function welcomeNoteContent(flowEmail: string | null, sampleAdded = false): string {
   const emailLine = flowEmail
-    ? `- Email a photo of a page (or a voice memo) to your Inbox flow: \`${flowEmail}\`\n`
+    ? `- Email photos of notes or audio files to your unique address: \`${flowEmail}\`\n`
     : "";
+  // Nothing is written to the vault until the sample link below is clicked, so
+  // both the offer and the no-writes promise flip once it has been.
+  // Rendered as a paragraph containing only this link, so welcomeView can
+  // replace the whole paragraph with the CTA card. Left as a working link if
+  // that replacement ever fails.
+  const sampleCta = `[${SAMPLE_CTA.button}](${SAMPLE_ACTION_HREF})`;
   return `# Welcome to Flowstate
 
-Your handwriting and voice memos will land in your vault looking a lot like this: clean, searchable text, filed exactly where you told it to go.
+[Flowstate](https://seekflowstate.com) turns handwritten pages and voice memos into clean, searchable text files in your Vault, saved exactly where you want them to go.
 
-Here's the whole trick:
+## How it works
 
-1. **Write on paper.** Or an e-ink tablet. Or think out loud into a voice memo.
-2. **Capture it.** Snap it with the [Flowstate app](https://seekflowstate.com), or email it straight from your reMarkable, Boox, or Supernote.
-3. **It lands in your vault.** Transcribed, formatted, and filed by your flows. The words stay yours — Flowstate just does the typing.
-
-We already made you a flow called **Inbox** that saves to a \`${STARTER_FOLDER}\` folder. Point it somewhere else, rename it, or add more flows any time in **Settings → Flowstate**.
+1. **Share your handwriting or voice.** Snap a photo from your paper notebook. Record a voice memo. Email a PDF from your e-ink tablet.
+2. **Flowstate cleans it up.** Flowstate does more than just transcribe. With custom instructions, it can also understand your shorthand & symbols, summarize what you wrote, translate it, and much more.
+3. **Your notes show up automatically.** Flowstate names your notes the way you want and saves them to your Vault exactly where you want.
 
 ## Try it now
 
-${emailLine}- Or grab the [Flowstate app](https://seekflowstate.com) and snap a photo of anything handwritten within arm's reach.
+${sampleCta}
 
-A minute later, it lands in your \`${STARTER_FOLDER}\` folder as a real note.
+## Capture your notes
 
-You have 50 free credits to play with — one page of handwriting or one minute of audio each. Go scribble something.
+How you can send your notes to Flowstate:
 
-*This screen is just a preview — Flowstate won't write anything to your vault until you send it something.*
+- [Upload a file](${UPLOAD_ACTION_HREF}) straight from this computer — images, PDFs, or audio.
+- Snap a handwritten page or record a voice memo in the [Flowstate app](https://seekflowstate.com).
+${emailLine}
+A minute later, it lands in your Vault, with your original file attached.
+
+## Flows
+
+By creating different Flows, you can choose how different notes get transcribed and where they get saved. We already made you a Flow called \`Inbox\` that saves to a \`${STARTER_FOLDER}\` folder. Add more Flows anytime in [Flowstate Settings](${SETTINGS_ACTION_HREF}).
+
+## Credits
+
+Flowstate uses AI to transcribe your notes. Each page of handwriting or minute of audio costs one credit, and you start with 25 free.
+
+Now go scribble something.
 
 — Raj and Rob
+
+*P.S. Having issues, or have ideas to make Flowstate better? Email us at \`${SUPPORT_EMAIL}\`.*
 `;
 }
 
@@ -130,12 +215,12 @@ export function deliveryNoticeText(count: number): string {
  * One-time setup after a user's first sign-in from this vault:
  *  - if the account has no flows for this vault, create a starter "Inbox"
  *    flow saving into the "Flowstate" folder
- *  - offer the sample note (SampleNoteModal): opted in, the transcribed
- *    welcome letter + handwritten PDF are written to the vault; skipped, the
- *    welcome screen opens as an ephemeral view instead
+ *  - open the welcome screen (an ephemeral view — never written to the
+ *    vault), which carries the getting-started information and offers the
+ *    sample note as a link the user can choose to click
  *
- * Nothing is written to the vault without the explicit opt-in above; the
- * first unprompted write happens when a real transcription is delivered.
+ * Nothing is written to the vault here; the first write happens only if the
+ * user clicks the sample link, or when a real transcription is delivered.
  * Runs at most once per account (tracked in
  * settings.starterSetupUsers) and never for accounts that already have flows
  * here. Best-effort: any failure logs and returns false rather than
@@ -143,8 +228,16 @@ export function deliveryNoticeText(count: number): string {
  *
  * Returns true when the welcome screen was opened (i.e. this was a genuinely
  * fresh account for this vault).
+ *
+ * `force` is the dev-only replay path (see FlowStatePlugin.replayOnboarding):
+ * it ignores both once-only gates so the flow can be re-run in a vault that is
+ * already set up. It still never creates a second starter flow.
  */
-export async function runFirstSignInSetup(plugin: FlowStatePlugin): Promise<boolean> {
+export async function runFirstSignInSetup(
+  plugin: FlowStatePlugin,
+  opts: { force?: boolean } = {}
+): Promise<boolean> {
+  const force = opts.force === true;
   try {
     const supabase = getSupabase(plugin.settings);
     const { data: userData, error: userErr } = await supabase.auth.getUser();
@@ -153,16 +246,20 @@ export async function runFirstSignInSetup(plugin: FlowStatePlugin): Promise<bool
     if (!uid) return false;
 
     const done = plugin.settings.starterSetupUsers ?? [];
-    if (done.includes(uid)) return false;
+    if (!force && done.includes(uid)) return false;
 
     const connectionId = await plugin.getMyConnectionId();
     if (!connectionId) return false;
 
     const existing = await listObsidianRoutes(supabase, connectionId);
-    const isFresh = existing.length === 0;
+    // A forced replay shows the flow even in a vault that already has flows;
+    // the starter-flow creation below stays keyed off the real emptiness check
+    // so it never spawns a duplicate Inbox.
+    const hasNoFlows = existing.length === 0;
+    const isFresh = hasNoFlows || force;
 
     let route: Route | null = existing[0] ?? null;
-    if (isFresh) {
+    if (hasNoFlows) {
       log("firstRun: creating starter flow", { uid, connectionId });
       route = await createProject(supabase, plugin.app, {
         name: STARTER_FLOW_NAME,
@@ -177,7 +274,7 @@ export async function runFirstSignInSetup(plugin: FlowStatePlugin): Promise<bool
 
     // Mark this account as set up either way, so we never auto-create a flow
     // the user later archived.
-    plugin.settings.starterSetupUsers = [...done, uid];
+    plugin.settings.starterSetupUsers = done.includes(uid) ? done : [...done, uid];
     await plugin.saveSettings();
 
     if (!isFresh) return false;
@@ -190,22 +287,11 @@ export async function runFirstSignInSetup(plugin: FlowStatePlugin): Promise<bool
       warn("firstRun: could not resolve flow email for welcome screen", e);
     }
 
-    // Offer the sample note. Opting in is the permission to write the two
-    // sample files; skipping (or just closing) opens the ephemeral preview.
-    new SampleNoteModal(plugin, async (addToVault) => {
-      try {
-        if (addToVault) {
-          const notePath = await installSampleNote(plugin);
-          await plugin.app.workspace.openLinkText(notePath, "", false);
-        } else {
-          await openWelcomeView(plugin, flowEmail);
-        }
-      } catch (e) {
-        warn("firstRun: sample note step failed; falling back to preview", e);
-        try { await openWelcomeView(plugin, flowEmail); } catch { /* give up quietly */ }
-      }
-    }).open();
-    log("firstRun: sample note offer shown", { flowEmail: !!flowEmail });
+    // Straight to the welcome screen — no interstitial. It carries the
+    // getting-started information, and the sample note is offered as a link
+    // inside it, so the plugin still writes nothing to the vault unprompted.
+    await openWelcomeView(plugin, flowEmail);
+    log("firstRun: welcome screen opened", { flowEmail: !!flowEmail });
     return true;
   } catch (e) {
     warn("firstRun: setup failed (continuing without it)", e);

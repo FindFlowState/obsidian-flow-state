@@ -17,18 +17,17 @@ First screen — shown once on plugin load while signed out.
 
 | ID    | Where             | Text                                                         |
 |-------|-------------------|--------------------------------------------------------------|
-| OB-1  | Title             | Your handwriting, transcribed into your vault                |
-| OB-2  | Intro             | Flowstate transcribes handwritten pages and voice memos and files them in Obsidian as clean, searchable markdown. |
-| OB-3  | Step 1 title      | Write or record                                              |
-| OB-4  | Step 1 body       | On paper, an e-ink tablet, or out loud as a voice memo.      |
-| OB-5  | Step 2 title      | Capture it                                                   |
-| OB-6  | Step 2 body       | Snap it with the Flowstate app, or email it from your reMarkable, Boox, or Supernote. |
-| OB-7  | Step 3 title      | It lands here                                                |
-| OB-8  | Step 3 body       | Transcribed, formatted, and filed in your vault.             |
-| OB-9  | Credits line      | Your first 50 credits are free. No card, no catch. Top up your credits anytime. |
+| OB-1  | Title             | Flowstate                                                    |
+| OB-2  | Intro             | [Flowstate](https://seekflowstate.com) turns handwriting and voice into text files, and saves them automatically to your Vault. |
+| OB-3  | Step 1 title      | Write by hand, or record your voice                          |
+| OB-4  | Step 1 body       | Use pen & paper, e-ink tablets, or talk out loud             |
+| OB-5  | Step 2 title      | Share it with Flowstate                                      |
+| OB-6  | Step 2 body       | Upload a file, send in an email, or use the Flowstate app    |
+| OB-7  | Step 3 title      | See notes saved to your Vault, automatically                 |
+| OB-8  | Step 3 body       | Flowstate transcribes and saves them exactly where you want  |
+| OB-9  | Sign-in label     | Enter your email to get a login code                         |
 | OB-10 | Email placeholder | you@example.com                                              |
 | OB-11 | CTA button        | Get started                                                  |
-| OB-12 | Dismiss link      | Maybe later                                                  |
 
 Code-entry step:
 
@@ -52,7 +51,7 @@ Notices:
 | OB-23 | Signed in   | HUZZAH! Welcome to Flowstate!   |
 | OB-24 | Bad code    | That code didn't work: {error}  |
 
-Command palette entry (`src/main.ts`): **ST-0** "Get started"
+Command palette entries (`src/main.ts`), both hidden unless an admin account (see `ADMIN_EMAILS`) has signed in on this vault: **ST-0** "Onboarding (dev)" replays the whole first-run sequence (intro modal → sign-in → welcome screen); "Onboarding (dev): welcome screen" opens just the welcome screen, skipping sign-in.
 
 ---
 
@@ -61,7 +60,7 @@ Command palette entry (`src/main.ts`): **ST-0** "Get started"
 | ID   | Where                    | Text                                                         |
 |------|--------------------------|--------------------------------------------------------------|
 | ST-1 | Row name                 | Sign up or sign in                                           |
-| ST-2 | Row description          | Enter your email and we'll send you a sign-in code. New accounts start with 50 free credits. |
+| ST-2 | Row description          | Enter your email and we'll send you a sign-in code. New accounts start with 25 free credits. |
 | ST-3 | Button                   | Send code                                                    |
 | ST-4 | Code state — row name    | Enter your code                                              |
 | ST-5 | Code state — description | We sent a sign-in code to **{email}**. Type it below, or click the link (just make sure if you click, it's on this device). |
@@ -91,75 +90,89 @@ Recent uploads section:
 
 ---
 
-## 3. Sample note offer (`src/sampleNoteModal.ts`)
+## 4. Handwritten sample page + sample note (`assets/sample-handwriting.pdf`, `src/firstRun.ts` → `sampleNoteContent`)
 
-Shown once, right after first sign-in. Opting in is the permission to write
-the two sample files.
+The bundled page is the handwritten sample page as the capture pipeline's
+single-page PDF (borderless — the page box is the image). It is written to the
+user's configured attachment folder and embedded from the note exactly like a
+real delivery. The web and mobile onboarding still ship an older bordered crop
+of the same page; refreshing those is a separate change. The note body is its word-for-word transcription. **If the image is
+replaced, re-transcribe this text and run `node scripts/embed-sample-pdf.mjs`.**
+ID **SN-6**:
 
-| ID   | Where       | Text                                                         |
-|------|-------------|--------------------------------------------------------------|
-| SN-1 | Title       | Wanna start with a sample note?                              |
-| SN-2 | Body        | We (Raj and Rob, makers of Flowstate) wrote you a welcome note (by hand, of course). Click below, and we'll drop it into your vault to show how Flowstate works. |
-| SN-3 | Fine print  | This will create two small files in your vault. Delete them anytime. Or you can skip, and we'll show you a preview instead. Nothing gets written. |
-| SN-4 | Skip button | Just show a preview                                          |
-| SN-5 | CTA button  | Add the sample note!                                         |
+> I was going to write Lorem Ipsum here 47 times like they do for filler copy, but then I thought — "huh, where does Lorem Ipsum even come from?" So I looked it up.
+>
+> - It comes from Cicero in ancient Rome, almost 2000 years ago.
+> - Lorem Ipsum are two first words of a book he wrote.
+> - Or actually, it's a truncation of the first two words — "dolorem ipsum" — which means "pain itself." No wonder they use it to describe writing!
+>
+> Hope you enjoyed this little tidbit and the rest of Flowstate. We made it for writers, thinkers, notetakers, and people like us who just want to feel a little bit more human again!
+>
+> — Raj
+
+Note title (the filename in the vault): **Where Lorem Ipsum comes from**.
 
 ---
 
-## 4. Handwritten letter + sample note (`assets/welcome-sample.pdf`, `src/firstRun.ts` → `sampleNoteContent`)
+## 5. Welcome screen (`src/firstRun.ts` → `welcomeNoteContent`)
 
-The letter and its "transcription" are word-for-word identical. **If this text
-changes, the PDF must be re-made** (write/scan it again or regenerate, then run
-`node scripts/embed-welcome-pdf.mjs`). ID **SN-6**:
+Ephemeral view shown immediately after first sign-in — no interstitial modal. It
+carries the getting-started information and offers the sample note as a CTA card,
+so the plugin still writes nothing to the vault unprompted. Reachable again via
+the **Learn more →** link at the top of Settings → Flowstate (signed in only).
 
-> Welcome to Flowstate
->
-> If you can read this, everything worked — this page started as ink on paper.
->
-> Write on paper. Capture it with the Flowstate app, or email it from your e-ink tablet. A minute later it lands in your vault as clean, searchable text — filed wherever you told it to go.
->
-> The words stay yours. Flowstate just does the typing.
->
-> You have 50 free credits — one page of handwriting or one minute of audio each.
->
-> Go scribble something.
->
-> — Raj and Rob
-
----
-
-## 5. Welcome preview screen (`src/firstRun.ts` → `welcomeNoteContent`)
-
-Ephemeral view shown when the user skips the sample note. Never written to the
-vault. ID **WV-1** (full markdown):
+Three links in it run code rather than navigating (wired in `welcomeView.ts`):
+`flowstate:upload` opens the upload modal, `flowstate:settings` opens this
+plugin's settings tab, and both `code`-formatted email addresses copy to the
+clipboard on click. ID **WV-1** (full markdown):
 
 > # Welcome to Flowstate
 >
-> Your handwriting and voice memos will land in your vault looking a lot like this: clean, searchable text, filed exactly where you told it to go.
+> [Flowstate](https://seekflowstate.com) turns handwritten pages and voice memos into clean, searchable text files in your Vault, saved exactly where you want them to go.
 >
-> Here's the whole trick:
+> ## How it works
 >
-> 1. **Write on paper.** Or an e-ink tablet. Or think out loud into a voice memo.
-> 2. **Capture it.** Snap it with the [Flowstate app](https://seekflowstate.com), or email it straight from your reMarkable, Boox, or Supernote.
-> 3. **It lands in your vault.** Transcribed, formatted, and filed by your flows. The words stay yours — Flowstate just does the typing.
->
-> We already made you a flow called **Inbox** that saves to a `Flowstate` folder. Point it somewhere else, rename it, or add more flows any time in **Settings → Flowstate**.
+> 1. **Share your handwriting or voice.** Snap a photo from your paper notebook. Record a voice memo. Email a PDF from your e-ink tablet.
+> 2. **Flowstate cleans it up.** Flowstate does more than just transcribe. With custom instructions, it can also understand your shorthand & symbols, summarize what you wrote, translate it, and much more.
+> 3. **Your notes show up automatically.** Flowstate names your notes the way you want and saves them to your Vault exactly where you want.
 >
 > ## Try it now
 >
-> - Email a photo of a page (or a voice memo) to your Inbox flow: `{flow email}`
-> - Or grab the [Flowstate app](https://seekflowstate.com) and snap a photo of anything handwritten within arm's reach.
+> _(CTA card — see WV-2 below)_
 >
-> A minute later, it lands in your `Flowstate` folder as a real note.
+> ## Capture your notes
 >
-> You have 50 free credits to play with — one page of handwriting or one minute of audio each. Go scribble something.
+> How you can send your notes to Flowstate:
 >
-> *This screen is just a preview — Flowstate won't write anything to your vault until you send it something.*
+> - [Upload a file](flowstate:upload) straight from this computer — images, PDFs, or audio.
+> - Snap a handwritten page or record a voice memo in the [Flowstate app](https://seekflowstate.com).
+> - Email photos of notes or audio files to your unique address: `{flow email}`
+>
+> A minute later, it lands in your Vault, with your original file attached.
+>
+> ## Flows
+>
+> By creating different Flows, you can choose how different notes get transcribed and where they get saved. We already made you a Flow called `Inbox` that saves to a `Flowstate` folder. Add more Flows anytime in [Flowstate Settings](flowstate:settings).
+>
+> ## Credits
+>
+> Flowstate uses AI to transcribe your notes. Each page of handwriting or minute of audio costs one credit, and you start with 25 free.
+>
+> Now go scribble something.
 >
 > — Raj and Rob
+>
+> *P.S. Having issues, or have ideas to make Flowstate better? Email us at `brothers@seekflowstate.com`.*
 
----
+CTA card copy lives in `SAMPLE_CTA` (`welcomeView.ts` builds it). **WV-2**, before:
 
+> We wrote you a real handwritten page, so you can see what it looks like in your Vault.
+> `[ See a sample note ]`
+
+**WV-3**, after:
+
+> Added a sample note to your vault.
+> `[ Open it ]`
 ## 6. Settings — Capture section (`src/settings.ts`)
 
 | ID   | Where                  | Text                                                         |
@@ -222,7 +235,7 @@ Notices:
 | UP-24 | New flow unnamed | Give your new flow a name first. |
 | UP-25 | Success | {n} file(s) sent to Flowstate. The notes land in your vault in a minute or two. |
 | UP-26 | Command palette entry (`src/main.ts`) | Upload a file |
-| UP-27 | Command while signed out | Flowstate: sign in first — run "Flowstate: Get started" or open Settings → Flowstate. |
+| UP-27 | Command while signed out | Flowstate: sign in first — open Settings → Flowstate. |
 
 ---
 

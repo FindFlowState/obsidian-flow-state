@@ -66,7 +66,7 @@ Settings → Flowstate shows your last few uploads with live status — processi
 
 ### Credits
 
-Each page or minute of audio uses one credit. You get 50 free credits to get started.
+Each page or minute of audio uses one credit. You get 25 free credits to get started.
 
 Your balance shows next to your email at the top of Settings → Flowstate (hover it for the subscription vs. top-up breakdown). Need more? Click **Manage credits** to upgrade your plan or buy top-ups.
 

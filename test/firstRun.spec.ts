@@ -11,18 +11,9 @@ const created: any[] = [];
 let existingRoutes: any[] = [];
 let currentUid: string | null = 'user-1';
 
-const sampleModals: any[] = [];
-vi.mock('../src/sampleNoteModal', () => ({
-  SampleNoteModal: class {
-    onChoice: (add: boolean) => Promise<void> | void;
-    opened = false;
-    constructor(_plugin: any, onChoice: any) { this.onChoice = onChoice; sampleModals.push(this); }
-    open() { this.opened = true; }
-  },
-}));
-// Tiny stand-in PDF so the spec doesn't drag the real 136KB asset through the transform
-vi.mock('../src/welcomePdf', () => ({
-  WELCOME_PDF_BASE64: Buffer.from('%PDF-1.4 sample').toString('base64'),
+// Tiny stand-in PDF so the spec doesn't drag the real 280KB asset through the transform
+vi.mock('../src/samplePdf', () => ({
+  SAMPLE_PDF_BASE64: Buffer.from('%PDF-1.3 sample').toString('base64'),
 }));
 
 vi.mock('../src/supabase', () => ({
@@ -40,7 +31,7 @@ vi.mock('../src/supabase', () => ({
   fetchUserHandle: async () => 'raj',
 }));
 
-import { runFirstSignInSetup, welcomeNoteContent, sampleNoteContent, installSampleNote, STARTER_FOLDER, SAMPLE_NOTE_TITLE } from '../src/firstRun';
+import { runFirstSignInSetup, welcomeNoteContent, sampleNoteContent, installSampleNote, STARTER_FOLDER, SAMPLE_NOTE_TITLE, SAMPLE_ACTION_HREF } from '../src/firstRun';
 import { WELCOME_VIEW_TYPE } from '../src/welcomeView';
 import { Plugin } from './mocks/obsidian';
 
@@ -59,7 +50,6 @@ beforeEach(() => {
   created.length = 0;
   existingRoutes = [];
   currentUid = 'user-1';
-  sampleModals.length = 0;
 });
 
 describe('runFirstSignInSetup', () => {
@@ -74,37 +64,42 @@ describe('runFirstSignInSetup', () => {
     expect(plugin.settings.routes['route-new']).toBeTruthy();
     expect(plugin.settings.starterSetupUsers).toContain('user-1');
 
-    // The choice modal opened; nothing written, no view yet
-    expect(sampleModals).toHaveLength(1);
-    expect(sampleModals[0].opened).toBe(true);
+    // Straight to the welcome screen — no interstitial, nothing written
     expect(plugin.app.vault.adapter.fs.size).toBe(0);
-    expect(plugin.__leaf.setViewState).not.toHaveBeenCalled();
-
-    // Skipping opens the ephemeral welcome view with the flow email in state
-    await sampleModals[0].onChoice(false);
     expect(plugin.__leaf.setViewState).toHaveBeenCalledWith({
       type: WELCOME_VIEW_TYPE,
       active: true,
-      state: { flowEmail: 'raj.inbox@in.example.com' },
+      state: { flowEmail: 'raj.inbox@in.example.com', sampleAdded: false },
     });
-    expect(plugin.app.vault.adapter.fs.size).toBe(0);
   });
 
-  it('writes the sample note + handwritten PDF only after the user opts in', async () => {
+  it('writes the sample note + handwritten PDF when the sample link is used', async () => {
     const plugin = makePlugin();
     await runFirstSignInSetup(plugin);
     expect(plugin.app.vault.adapter.fs.size).toBe(0);
 
-    await sampleModals[0].onChoice(true);
+    const notePath = await installSampleNote(plugin.app);
 
-    const notePath = `${STARTER_FOLDER}/${SAMPLE_NOTE_TITLE}.md`;
+    // Vault root, not the flow's folder
+    expect(notePath).toBe(`${SAMPLE_NOTE_TITLE}.md`);
     const note = plugin.app.vault.adapter.fs.get(notePath);
     expect(note?.type).toBe('file');
-    expect(note?.content).toContain('ink on paper');
-    expect(note?.content).toContain(`![[${STARTER_FOLDER}/${SAMPLE_NOTE_TITLE}.pdf]]`);
-    expect(plugin.app.vault.adapter.fs.get(`${STARTER_FOLDER}/${SAMPLE_NOTE_TITLE}.pdf`)?.type).toBe('file');
-    expect(plugin.app.workspace.openLinkText).toHaveBeenCalledWith(notePath, '', false);
-    expect(plugin.__leaf.setViewState).not.toHaveBeenCalled();
+    expect(note?.content).toContain('Lorem Ipsum');
+    // Attachment goes wherever a real delivery would put it (no baseFolder),
+    // and the note links it the same way
+    expect(note?.content).toMatch(/!\[\[.*Where Lorem Ipsum comes from\.pdf\]\]/);
+  });
+
+  it('replays for an already-set-up vault when forced, without a duplicate starter flow', async () => {
+    existingRoutes = [{ id: 'route-old', slug: 'journal', user_id: 'user-1', is_active: true }];
+    const plugin = makePlugin();
+    plugin.settings.starterSetupUsers = ['user-1'];
+
+    const delivered = await runFirstSignInSetup(plugin, { force: true });
+
+    expect(delivered).toBe(true);
+    expect(created).toHaveLength(0);
+    expect(plugin.__leaf.setViewState).toHaveBeenCalled();
   });
 
   it('does nothing for an account that already has flows in this vault', async () => {
@@ -126,7 +121,6 @@ describe('runFirstSignInSetup', () => {
 
     expect(delivered).toBe(false);
     expect(created).toHaveLength(0);
-    expect(sampleModals).toHaveLength(0);
     expect(plugin.__leaf.setViewState).not.toHaveBeenCalled();
   });
 
@@ -146,12 +140,22 @@ describe('welcomeNoteContent', () => {
     expect(welcomeNoteContent('raj.inbox@in.example.com')).toContain('raj.inbox@in.example.com');
     expect(welcomeNoteContent(null)).not.toContain('Email a photo');
   });
+
+  it('puts Try it now, with the sample CTA, above the capture routes', () => {
+    // The CTA placeholder link is present in both states — welcomeView swaps
+    // the paragraph for a card and reads sampleAdded for the card's wording.
+    const offered = welcomeNoteContent(null, false);
+    expect(offered).toContain(`(${SAMPLE_ACTION_HREF})`);
+    // ...under its own "Try it now" heading, below the capture routes
+    expect(offered.indexOf('## Try it now')).toBeLessThan(offered.indexOf('## Capture your notes'));
+    expect(offered.indexOf('## Try it now')).toBeLessThan(offered.indexOf(SAMPLE_ACTION_HREF));
+  });
 });
 
 describe('sampleNoteContent', () => {
   it('embeds the handwritten original underneath the transcription', () => {
-    const md = sampleNoteContent('Flowstate/Welcome to Flowstate.pdf');
-    expect(md).toContain('![[Flowstate/Welcome to Flowstate.pdf]]');
-    expect(md.indexOf('ink on paper')).toBeLessThan(md.indexOf('![['));
+    const md = sampleNoteContent('attachments/Where Lorem Ipsum comes from.pdf');
+    expect(md).toContain('![[attachments/Where Lorem Ipsum comes from.pdf]]');
+    expect(md.indexOf('Lorem Ipsum')).toBeLessThan(md.indexOf('![['));
   });
 });

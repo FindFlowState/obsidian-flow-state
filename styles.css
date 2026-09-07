@@ -8,7 +8,12 @@
 .fs-error-text { color: var(--text-error); }
 
 /* ---- Route editor ---- */
-.fs-wide-control { flex-grow: 1; min-width: 450px; max-width: 100%; }
+/* Wide text controls. min-width alone squeezes .setting-item-info to zero in a
+   narrow settings pane and the field label disappears entirely; letting the row
+   wrap drops the control onto its own line instead, so the label always shows. */
+.fs-wide-setting { flex-wrap: wrap; row-gap: var(--size-4-2); }
+.fs-wide-setting .setting-item-info { min-width: 12em; }
+.fs-wide-control { flex-grow: 1; flex-basis: 450px; min-width: 0; max-width: 100%; }
 .fs-editor-header { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
 .fs-back-btn { padding: 4px 10px; font-size: 1em; line-height: 1; cursor: pointer; }
 .fs-editor-title { font-size: 1.6em; margin: 0; }
@@ -22,7 +27,25 @@
 .fs-button-group { display: flex; gap: 8px; }
 
 /* ---- Settings tab ---- */
-.fs-settings-title { font-size: 1.17em; font-weight: 600; margin-bottom: 8px; }
+/* Obsidian 1.13 insets section headings by --size-4-4 and setting cards by
+   --setting-items-padding-x, but blocks we draw ourselves sit flush at 0 —
+   which reads as a ragged left edge. Re-use Obsidian's own token so our
+   blocks line up with its headings under any theme. */
+.fs-settings-tab > .fs-settings-title,
+.fs-settings-tab > .fs-intro,
+.fs-settings-tab > .fs-onboarding-bullets,
+.fs-settings-tab .fs-account-bar,
+.fs-settings-tab .fs-recent-list,
+.fs-settings-tab .fs-history-link {
+  padding-inline: var(--size-4-4);
+}
+/* Section headings default to --font-ui-medium (15px), a hair above our 0.9em
+   body text — too close to read as a heading. Nudge the group-heading token
+   (scoped to this tab, so no other plugin's settings are touched). */
+.fs-settings-tab {
+  --setting-group-heading-size: calc(var(--font-ui-medium) * 1.15);
+}
+.fs-settings-title { font-size: var(--font-ui-large); font-weight: var(--font-bold); margin-bottom: 8px; }
 .fs-intro { font-size: 0.9em; margin-bottom: 16px; }
 .fs-muted-link { color: var(--text-muted); }
 .fs-onboarding-bullets { margin-bottom: 20px; }
@@ -71,13 +94,12 @@
 .fs-recent-info { min-width: 0; }
 .fs-recent-title { font-size: 0.95em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .fs-recent-meta { font-size: 0.8em; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.fs-history-link { margin-top: 8px; font-size: 0.9em; padding-left: 10px; }
+.fs-history-link { margin-top: 8px; font-size: 0.9em; }
 
 /* ---- Auth (code sign-in) ---- */
 .fs-auth-links { display: flex; gap: 16px; font-size: 0.85em; margin-top: 2px; }
 
 /* ---- Capture section ---- */
-.fs-capture-intro { margin-bottom: 10px; }
 .fs-capture-email { margin-top: 6px; }
 .fs-capture-email code { font-size: 0.95em; user-select: all; }
 .fs-qr-box { display: flex; flex-direction: column; align-items: center; gap: 2px; }
@@ -138,11 +160,10 @@
 }
 .fs-ob-step-title { font-weight: 600; }
 .fs-ob-step-body { font-size: 0.9em; color: var(--text-muted); }
-.fs-ob-credits { font-size: 0.9em; font-weight: 500; margin: 0 0 16px 0; }
+.fs-ob-signin-label { font-size: 0.85em; color: var(--text-muted); margin: 0 0 6px 0; }
 .fs-ob-email-row { display: flex; gap: 8px; }
 .fs-ob-email-row input { flex: 1; }
 .fs-ob-links { display: flex; gap: 16px; font-size: 0.85em; margin-top: 12px; }
-.fs-ob-later { text-align: center; margin-top: 14px; font-size: 0.85em; }
 
 /* ---- Note properties (front matter) editor ---- */
 .fs-fm-body { margin-top: 6px; }
@@ -157,3 +178,47 @@
 .fs-fm-preview-wrap { margin-top: 4px; }
 .fs-fm-preview-label { font-size: 0.85em; color: var(--text-muted); margin-bottom: 4px; }
 .fs-fm-preview { font-size: 0.85em; background: var(--background-secondary); border: 1px solid var(--background-modifier-border); border-radius: 6px; padding: 10px 12px; margin: 0; overflow-x: auto; }
+
+/* ---- Welcome screen sample CTA ---- */
+.fs-welcome-cta {
+  margin: 24px 0;
+  padding: 20px 22px;
+  border: 1px solid var(--background-modifier-border);
+  border-left: 3px solid var(--interactive-accent);
+  border-radius: 8px;
+  background: var(--background-secondary);
+}
+.fs-welcome-cta-body { color: var(--text-muted); margin-bottom: 14px; }
+.fs-welcome-cta-btn { cursor: pointer; }
+.fs-welcome-email { cursor: pointer; user-select: all; }
+.fs-welcome-email:hover { background: var(--background-modifier-hover); }
+
+/* ---- Settings tabs ---- */
+.fs-tabs {
+  display: flex;
+  gap: 2px;
+  margin: 4px 0 18px;
+  padding-inline: var(--size-4-4);
+  border-bottom: 1px solid var(--background-modifier-border);
+}
+.fs-tab {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  border-radius: 0;
+  padding: 8px 12px;
+  cursor: pointer;
+  color: var(--text-muted);
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+}
+.fs-tab:hover { background: transparent; color: var(--text-normal); }
+.fs-tab-active {
+  color: var(--text-normal);
+  font-weight: var(--font-semibold);
+  border-bottom-color: var(--interactive-accent);
+}
+
+/* ---- Welcome screen ----
+   Headings and lists are left to the reader's theme; nothing here restyles
+   typography or list markers. */

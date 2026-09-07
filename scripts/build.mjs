@@ -12,6 +12,11 @@ const __dirname = dirname(__filename);
 const modeArg = process.argv.find(a => a.startsWith('--mode='));
 const mode = modeArg ? modeArg.split('=')[1] : 'local'; // default local
 const skipSentry = process.argv.includes('--skip-sentry');
+// --dev-id: build against this mode's env but ship the "Flow State (Dev)"
+// manifest id, so the result installs alongside the released plugin instead of
+// replacing it. Combined with --mode=prod this is the "test a branch on my real
+// account" build; it lands in dist/prod-dev and never uploads source maps.
+const devId = process.argv.includes('--dev-id');
 
 // Resolve env file path
 const projectRoot = resolve(__dirname, '..'); // apps/obsidian_plugin
@@ -75,7 +80,7 @@ const entry = resolve(projectRoot, 'src/main.ts');
 // - prod: emit main.js at project root (next to manifest.json)
 // - local: emit to dist/local/main.js
 const outDir = mode === 'prod'
-  ? resolve(projectRoot, 'dist', 'prod')
+  ? resolve(projectRoot, 'dist', devId ? 'prod-dev' : 'prod')
   : resolve(projectRoot, 'dist', 'local');
 mkdirSync(outDir, { recursive: true });
 const outfile = join(outDir, 'main.js');
@@ -97,7 +102,7 @@ build(common).then(() => {
   // - local: write a dev manifest into dist/local with modified id/name
   const manifestSrc = resolve(projectRoot, 'manifest.json');
   const manifestDst = join(outDir, 'manifest.json');
-  if (existsSync(manifestSrc) && mode == 'prod') {
+  if (existsSync(manifestSrc) && mode === 'prod' && !devId) {
     // For prod, also place a copy of manifest.json in dist/prod for easy release uploads
     copyFileSync(manifestSrc, manifestDst);
     const versionsSrc = resolve(projectRoot, 'versions.json');
@@ -106,7 +111,7 @@ build(common).then(() => {
       copyFileSync(versionsSrc, versionsDst);
     }
   }
-  if (existsSync(manifestSrc) && mode !== 'prod') {
+  if (existsSync(manifestSrc) && (mode !== 'prod' || devId)) {
     // local/dev manifest: override id and name so Obsidian treats it as a separate plugin
     const raw = readFileSync(manifestSrc, 'utf8');
     const json = JSON.parse(raw);
@@ -131,7 +136,7 @@ build(common).then(() => {
   }
 
   // Upload source maps to Sentry for prod builds (skip with --skip-sentry)
-  if (mode === 'prod' && SENTRY_AUTH_TOKEN && SENTRY_DSN && !skipSentry) {
+  if (mode === 'prod' && !devId && SENTRY_AUTH_TOKEN && SENTRY_DSN && !skipSentry) {
     console.log(`[build] Uploading source maps to Sentry (release: ${SENTRY_RELEASE})...`);
     try {
       execSync(
