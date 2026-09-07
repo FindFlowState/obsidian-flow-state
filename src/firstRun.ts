@@ -44,6 +44,30 @@ export const SAMPLE_CTA = {
 /** Href of the "upload a file" link in the welcome screen — opens the plugin's upload modal. */
 export const UPLOAD_ACTION_HREF = "flowstate:upload";
 
+/**
+ * Href of the bottom CTA in the welcome screen (after Credits, before the
+ * sign-off). Like the sample link, WelcomeView swaps its paragraph for a CTA
+ * card: sign-in when signed out, upload when signed in.
+ */
+export const BOTTOM_CTA_HREF = "flowstate:bottom-cta";
+
+/**
+ * Copy for the welcome screen's bottom CTA card (built as DOM in
+ * welcomeView.ts). Signed-out readers get the door in; signed-in readers get
+ * the first real capture.
+ *
+ * ⚠️ User-facing copy — follow the Flowstate voice guides before editing.
+ */
+export const GET_STARTED_CTA = {
+  body: "Sign in or create an account — new accounts start with 25 free credits.",
+  button: "Get started",
+} as const;
+
+export const UPLOAD_CTA = {
+  body: "Grab a handwritten page or a voice memo and watch it land in your Vault.",
+  button: "Upload a file",
+} as const;
+
 /** Href that opens this plugin's settings tab, rather than telling the user where to click. */
 export const SETTINGS_ACTION_HREF = "flowstate:settings";
 
@@ -106,14 +130,20 @@ export async function installSampleNote(app: App): Promise<string> {
   return notePath;
 }
 
-/** Open the ephemeral welcome view (no vault writes). */
+/**
+ * Open the ephemeral welcome view (no vault writes). Reuses an already-open
+ * welcome tab rather than stacking a second one — signing in from the welcome
+ * screen's own CTA re-opens it in its signed-in form.
+ */
 export async function openWelcomeView(
   plugin: FlowStatePlugin,
   flowEmail: string | null,
   sampleAdded = false
 ): Promise<void> {
-  const leaf = plugin.app.workspace.getLeaf(true);
+  const leaf = plugin.app.workspace.getLeavesOfType(WELCOME_VIEW_TYPE)[0]
+    ?? plugin.app.workspace.getLeaf(true);
   await leaf.setViewState({ type: WELCOME_VIEW_TYPE, active: true, state: { flowEmail, sampleAdded } });
+  await plugin.app.workspace.revealLeaf(leaf);
 }
 
 /**
@@ -138,15 +168,24 @@ export async function openWelcomeScreenNow(plugin: FlowStatePlugin): Promise<voi
 
 /**
  * The welcome screen shown right after first sign-in — every time, whether or
- * not the user took the sample note. It carries the getting-started
- * information (the sample note is just a fun optional demo). Formatted the way
- * a real transcription lands so the user sees the end state before they've
- * captured anything. Rendered in an ephemeral view (see welcomeView.ts) — it
- * is never written to the vault.
+ * not the user took the sample note — and, since the intro modal grew a
+ * "Learn more" button, also to signed-out readers deciding whether to sign
+ * up. It carries the getting-started information (the sample note is just a
+ * fun optional demo). Formatted the way a real transcription lands so the
+ * user sees the end state before they've captured anything. Rendered in an
+ * ephemeral view (see welcomeView.ts) — it is never written to the vault.
+ *
+ * The two variants share every word except the Flows tense (signed-out
+ * readers don't have an Inbox flow yet) and the bottom CTA card: sign-in when
+ * signed out, upload when signed in.
  *
  * ⚠️ User-facing copy — follow the Flowstate voice guides before editing.
  */
-export function welcomeNoteContent(flowEmail: string | null, sampleAdded = false): string {
+export function welcomeNoteContent(
+  flowEmail: string | null,
+  sampleAdded = false,
+  signedIn = true
+): string {
   const emailLine = flowEmail
     ? `- Email photos of notes or audio files to your unique address: \`${flowEmail}\`\n`
     : "";
@@ -156,6 +195,13 @@ export function welcomeNoteContent(flowEmail: string | null, sampleAdded = false
   // replace the whole paragraph with the CTA card. Left as a working link if
   // that replacement ever fails.
   const sampleCta = `[${SAMPLE_CTA.button}](${SAMPLE_ACTION_HREF})`;
+  // Same placeholder trick as the sample link: a paragraph holding only this
+  // link, which welcomeView swaps for the CTA card matching the signed-in
+  // state.
+  const bottomCta = `[${(signedIn ? UPLOAD_CTA : GET_STARTED_CTA).button}](${BOTTOM_CTA_HREF})`;
+  const flowsSentence = signedIn
+    ? `We already made you a Flow called \`${STARTER_FLOW_NAME}\` that saves to a \`${STARTER_FOLDER}\` folder.`
+    : `When you sign up, we'll make you a Flow called \`${STARTER_FLOW_NAME}\` that saves to a \`${STARTER_FOLDER}\` folder.`;
   return `# Welcome to Flowstate
 
 [Flowstate](https://seekflowstate.com) turns handwritten pages and voice memos into clean, searchable text files in your Vault, saved exactly where you want them to go.
@@ -181,11 +227,15 @@ A minute later, it lands in your Vault, with your original file attached.
 
 ## Flows
 
-By creating different Flows, you can choose how different notes get transcribed and where they get saved. We already made you a Flow called \`Inbox\` that saves to a \`${STARTER_FOLDER}\` folder. Add more Flows anytime in [Flowstate Settings](${SETTINGS_ACTION_HREF}).
+By creating different Flows, you can choose how different notes get transcribed and where they get saved. ${flowsSentence} Add more Flows anytime in [Flowstate Settings](${SETTINGS_ACTION_HREF}).
 
 ## Credits
 
-Flowstate uses AI to transcribe your notes. Each page of handwriting or minute of audio costs one credit, and you start with 25 free.
+Flowstate uses AI to transcribe your notes. Each page of handwriting or minute of audio costs one credit, and you start with 25 free. When you're running low, top up anytime: $5 for 100 credits, $10 for 300, or $20 for 1,000. Top-ups never expire.
+
+## Get started
+
+${bottomCta}
 
 Now go scribble something.
 

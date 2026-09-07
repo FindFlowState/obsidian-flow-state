@@ -1,6 +1,7 @@
 import { ItemView, MarkdownRenderer, Notice, WorkspaceLeaf, type ViewStateResult } from "obsidian";
-import { welcomeNoteContent, installSampleNote, SAMPLE_ACTION_HREF, UPLOAD_ACTION_HREF, SETTINGS_ACTION_HREF, SUPPORT_EMAIL, SAMPLE_CTA } from "./firstRun";
+import { welcomeNoteContent, installSampleNote, SAMPLE_ACTION_HREF, UPLOAD_ACTION_HREF, SETTINGS_ACTION_HREF, BOTTOM_CTA_HREF, SUPPORT_EMAIL, SAMPLE_CTA, GET_STARTED_CTA, UPLOAD_CTA } from "./firstRun";
 import { openUploadModal } from "./uploadModal";
+import { getSupabase } from "./supabase";
 import type FlowStatePlugin from "./main";
 
 export const WELCOME_VIEW_TYPE = "flow-state-welcome";
@@ -17,6 +18,9 @@ export class WelcomeView extends ItemView {
   private sampleAdded = false;
   private adding = false;
   private samplePath: string | null = null;
+  // Checked live on every render (not view state): the same open tab flips
+  // from the signed-out variant to the signed-in one after the user signs in.
+  private signedIn = false;
 
   constructor(leaf: WorkspaceLeaf, private plugin: FlowStatePlugin) {
     super(leaf);
@@ -51,18 +55,26 @@ export class WelcomeView extends ItemView {
   }
 
   private async render(): Promise<void> {
+    try {
+      const supabase = getSupabase(this.plugin.settings);
+      const { data: { session } } = await supabase.auth.getSession();
+      this.signedIn = !!session;
+    } catch {
+      this.signedIn = false;
+    }
     const el = this.contentEl;
     el.empty();
     el.addClass("fs-welcome-view");
     const inner = el.createDiv({ cls: "fs-welcome-inner markdown-rendered" });
     await MarkdownRenderer.render(
       this.app,
-      welcomeNoteContent(this.flowEmail, this.sampleAdded),
+      welcomeNoteContent(this.flowEmail, this.sampleAdded, this.signedIn),
       inner,
       "",
       this
     );
     this.renderSampleCta(inner);
+    this.renderBottomCta(inner);
     this.wireUploadLink(inner);
     this.wireSettingsLink(inner);
     this.wireEmailCopy(inner);
@@ -88,13 +100,41 @@ export class WelcomeView extends ItemView {
     });
   }
 
-  /** "Upload a file" opens the plugin's upload modal rather than navigating. */
+  /**
+   * "Upload a file" opens the plugin's upload modal rather than navigating.
+   * Signed-out readers land in the sign-in modal instead — uploading needs an
+   * account, and the sign-in door is more useful than an error.
+   */
   private wireUploadLink(inner: HTMLElement): void {
     const link = inner.querySelector<HTMLAnchorElement>(`a[href="${UPLOAD_ACTION_HREF}"]`);
     if (!link) return;
     this.registerDomEvent(link, "click", (evt: MouseEvent) => {
       evt.preventDefault();
-      openUploadModal(this.app, this.plugin);
+      if (this.signedIn) openUploadModal(this.app, this.plugin);
+      else this.plugin.openSignIn();
+    });
+  }
+
+  /**
+   * Swap the bottom CTA placeholder (after Credits, before the sign-off) for
+   * a card matching the signed-in state: the sign-in door when signed out,
+   * the first real upload when signed in. Same fallback contract as the
+   * sample CTA: if the placeholder is missing, the plain link still works via
+   * wireUploadLink / nothing is lost.
+   */
+  private renderBottomCta(inner: HTMLElement): void {
+    const link = inner.querySelector<HTMLAnchorElement>(`a[href="${BOTTOM_CTA_HREF}"]`);
+    if (!link) return;
+    const cta = this.signedIn ? UPLOAD_CTA : GET_STARTED_CTA;
+    const host = link.closest("p") ?? link;
+    const card = createDiv({ cls: "fs-welcome-cta" });
+    card.createDiv({ cls: "fs-welcome-cta-body", text: cta.body });
+    const btn = card.createEl("button", { cls: "fs-welcome-cta-btn mod-cta", text: cta.button });
+    host.replaceWith(card);
+    this.registerDomEvent(btn, "click", (evt: MouseEvent) => {
+      evt.preventDefault();
+      if (this.signedIn) openUploadModal(this.app, this.plugin);
+      else this.plugin.openSignIn();
     });
   }
 
