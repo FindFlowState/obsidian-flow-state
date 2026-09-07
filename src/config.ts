@@ -20,7 +20,7 @@ export const BUILD_ENV = (typeof ENV !== "undefined" ? ENV : "").trim();
  * behind it is local UI the user could reach by editing data.json anyway; it
  * just keeps a testing affordance out of normal users' command palettes.
  */
-export const ADMIN_EMAILS = ["nhsheth@gmail.com", "rob@ungated.media"];
+export const ADMIN_EMAILS = ["nhsheth@gmail.com", "rob@ungated.media", "chuckmeister8@gmail.com"];
 
 /** True when `email` belongs to an admin/dev account. */
 export function isAdminEmail(email: string | null | undefined): boolean {
