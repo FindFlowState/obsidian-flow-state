@@ -138,32 +138,66 @@ export async function installSampleNote(app: App): Promise<string> {
 export async function openWelcomeView(
   plugin: FlowStatePlugin,
   flowEmail: string | null,
-  sampleAdded = false
+  sampleAdded = false,
+  opts: { reveal?: boolean } = {}
 ): Promise<void> {
+  // reveal:false is the background-refresh path — update the open tab's state
+  // without yanking focus back to it.
+  const reveal = opts.reveal !== false;
   const leaf = plugin.app.workspace.getLeavesOfType(WELCOME_VIEW_TYPE)[0]
     ?? plugin.app.workspace.getLeaf(true);
-  await leaf.setViewState({ type: WELCOME_VIEW_TYPE, active: true, state: { flowEmail, sampleAdded } });
-  await plugin.app.workspace.revealLeaf(leaf);
+  await leaf.setViewState({ type: WELCOME_VIEW_TYPE, active: reveal, state: { flowEmail, sampleAdded } });
+  if (reveal) await plugin.app.workspace.revealLeaf(leaf);
 }
 
 /**
- * Open the welcome screen on its own, resolving the flow email if a session is
- * available. Used by the dev command so the screen can be reviewed without
- * signing out and back in; harmless if signed out (the email bullet is simply
- * omitted).
+ * Resolve the signed-in user's flow ingest email from the backend (handle +
+ * first flow's slug). Several serial round trips — never put this on the
+ * critical path of showing UI; open from settings.cachedFlowEmail instead and
+ * call this in the background.
+ */
+export async function resolveFlowEmail(plugin: FlowStatePlugin): Promise<string | null> {
+  const supabase = getSupabase(plugin.settings);
+  const handle = await fetchUserHandle(supabase);
+  const connectionId = await plugin.getMyConnectionId();
+  const routes = connectionId ? await listObsidianRoutes(supabase, connectionId) : [];
+  return computeFlowEmail(handle, routes[0]?.slug, DEFAULT_INGEST_EMAIL_DOMAIN);
+}
+
+/**
+ * Open the welcome screen immediately from local state — the session check is
+ * a local storage read and the flow email comes from the cache, so the tab
+ * appears without waiting on the network. A background refresh then
+ * re-resolves the email and quietly updates the open tab (and the cache) if
+ * it changed. Signed out, there's no email to show and nothing to refresh.
  */
 export async function openWelcomeScreenNow(plugin: FlowStatePlugin): Promise<void> {
-  let flowEmail: string | null = null;
+  let hasSession = false;
   try {
     const supabase = getSupabase(plugin.settings);
-    const handle = await fetchUserHandle(supabase);
-    const connectionId = await plugin.getMyConnectionId();
-    const routes = connectionId ? await listObsidianRoutes(supabase, connectionId) : [];
-    flowEmail = computeFlowEmail(handle, routes[0]?.slug, DEFAULT_INGEST_EMAIL_DOMAIN);
+    const { data: { session } } = await supabase.auth.getSession();
+    hasSession = !!session;
   } catch (e) {
-    warn("openWelcomeScreenNow: could not resolve flow email", e);
+    warn("openWelcomeScreenNow: session check failed", e);
   }
-  await openWelcomeView(plugin, flowEmail);
+  const cached = hasSession ? plugin.settings.cachedFlowEmail || null : null;
+  await openWelcomeView(plugin, cached);
+  if (!hasSession) return;
+
+  void (async () => {
+    try {
+      const fresh = await resolveFlowEmail(plugin);
+      if (!fresh || fresh === cached) return;
+      plugin.settings.cachedFlowEmail = fresh;
+      await plugin.saveData(plugin.settings);
+      const leaf = plugin.app.workspace.getLeavesOfType(WELCOME_VIEW_TYPE)[0];
+      if (!leaf) return; // tab was closed while we were resolving
+      const state = leaf.view.getState() as { sampleAdded?: unknown };
+      await openWelcomeView(plugin, fresh, state.sampleAdded === true, { reveal: false });
+    } catch (e) {
+      warn("openWelcomeScreenNow: background flow-email refresh failed", e);
+    }
+  })();
 }
 
 /**
@@ -333,6 +367,11 @@ export async function runFirstSignInSetup(
     try {
       const handle = await fetchUserHandle(supabase);
       flowEmail = computeFlowEmail(handle, route?.slug, DEFAULT_INGEST_EMAIL_DOMAIN);
+      // Warm the cache so later opens (settings/intro "Learn more") are instant.
+      if (flowEmail) {
+        plugin.settings.cachedFlowEmail = flowEmail;
+        await plugin.saveSettings();
+      }
     } catch (e) {
       warn("firstRun: could not resolve flow email for welcome screen", e);
     }
