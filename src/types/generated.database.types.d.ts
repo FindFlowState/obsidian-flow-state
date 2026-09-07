@@ -364,10 +364,6 @@ export type Database = {
           id: string
           notification_preferences: Json | null
           purchased_credits: number
-          subscription_credits: number
-          subscription_expires_at: string | null
-          subscription_plan: Database["public"]["Enums"]["subscription_plan"]
-          subscription_renews: boolean | null
           updated_at: string
         }
         Insert: {
@@ -381,10 +377,6 @@ export type Database = {
           id?: string
           notification_preferences?: Json | null
           purchased_credits?: number
-          subscription_credits?: number
-          subscription_expires_at?: string | null
-          subscription_plan?: Database["public"]["Enums"]["subscription_plan"]
-          subscription_renews?: boolean | null
           updated_at?: string
         }
         Update: {
@@ -398,10 +390,6 @@ export type Database = {
           id?: string
           notification_preferences?: Json | null
           purchased_credits?: number
-          subscription_credits?: number
-          subscription_expires_at?: string | null
-          subscription_plan?: Database["public"]["Enums"]["subscription_plan"]
-          subscription_renews?: boolean | null
           updated_at?: string
         }
         Relationships: [
@@ -423,22 +411,9 @@ export type Database = {
         Args: { p_credits: number; p_user_id: string }
         Returns: undefined
       }
-      add_subscription_credits: {
-        Args: {
-          p_credits: number
-          p_expires_at?: string
-          p_plan?: Database["public"]["Enums"]["subscription_plan"]
-          p_user_id: string
-        }
-        Returns: number
-      }
       consume_credits: {
         Args: { p_amount: number; p_user_id: string }
-        Returns: {
-          purchased_deducted: number
-          subscription_deducted: number
-          total_consumed: number
-        }[]
+        Returns: number
       }
       gen_route_slug: {
         Args: { p_name: string; p_user_id: string }
@@ -480,7 +455,6 @@ export type Database = {
         | "completed"
         | "failed"
       service_type: "obsidian" | "gdrive" | "onenote" | "notion"
-      subscription_plan: "free" | "paid" | "unlimited" | "max"
     }
     CompositeTypes: {
       [_ in never]: never

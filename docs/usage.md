@@ -61,11 +61,11 @@ When you upload from the mobile app, Flowstate can automatically open the synced
 
 ### Credits
 
-Each page or minute of audio uses one credit. You get 50 free credits to get started.
+Each page or minute of audio uses one credit. You get 25 free credits to get started.
 
 To check your balance, open Settings → Flowstate → expand the **Credits** section.
 
-Need more credits? Click **Manage Credits** to upgrade your plan or buy top-ups.
+Need more credits? Click **Manage Credits** to buy a top-up pack. Credits never expire.
 
 ## Privacy
 
