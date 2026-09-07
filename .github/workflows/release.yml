@@ -2,8 +2,11 @@ name: Release Obsidian Plugin
 
 on:
   push:
+    # Version tags only, x.y.z with no "v" prefix: the community store looks up
+    # a release by the bare version from manifest.json. A bare "*" meant any tag
+    # at all — a scratch or backup tag — published a public release.
     tags:
-      - "*"
+      - "[0-9]+.[0-9]+.[0-9]+"
 
 permissions:
   contents: write
@@ -16,15 +19,40 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
-          node-version: 20
+          node-version: 24
+
+      # Obsidian's community store resolves a plugin's download from the
+      # release whose tag matches the version in manifest.json on the default
+      # branch. A mismatch doesn't just look wrong — it leaves the store unable
+      # to find the release at all. Fail before anything is built or published.
+      - name: Verify tag matches manifest version
+        run: |
+          tag="${GITHUB_REF#refs/tags/}"
+          manifest="$(node -p "require('./manifest.json').version")"
+          if [ "$tag" != "$manifest" ]; then
+            echo "tag $tag does not match manifest.json version $manifest"
+            exit 1
+          fi
+          echo "tag and manifest agree on $tag"
 
       - name: Install dependencies
-        run: npm install
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      # A release used to publish whatever built, whether or not it worked.
+      # These run before the build so a bad tag fails without publishing.
+      - name: Test
+        run: npm test
 
       - name: Build plugin
         env:
@@ -56,7 +84,7 @@ jobs:
           test -f dist/prod/styles.css || { echo "styles.css not found"; exit 1; }
 
       - name: Attest build artifacts
-        uses: actions/attest-build-provenance@v2
+        uses: actions/attest-build-provenance@v4
         with:
           subject-path: |
             dist/prod/main.js
