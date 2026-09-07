@@ -46,8 +46,10 @@ Flowstate is available in Obsidian's official community plugin store.
 
 ### Step 4: Connect Your Account
 
-1. Still in Settings, click **Flowstate** under Community plugins
-2. Enter your email address and click **Connect**
-3. Check your email for a magic link and click it to sign in (check spam if needed)
+The first time the plugin loads, it opens a short welcome screen — enter your email there and click **Get started**. (Closed it? Open **Settings → Flowstate** to sign in.)
 
-If you don't have a Flowstate account, one will be created automatically.
+1. Enter your email address and click **Get started** (or **Send code** in settings)
+2. Check your email for a 6-digit sign-in code and type it into Obsidian (check spam if needed)
+3. Prefer links? The same email contains a magic link — click it on the device where Obsidian is open
+
+If you don't have a Flowstate account, one will be created automatically. After you sign in, Flowstate creates a starter **Inbox** flow (saving to a `Flowstate` folder) and opens a **welcome screen** showing how capture works. Nothing is written to your vault: that screen is a temporary tab, and it offers a **sample note** — a transcribed handwritten page, with the original PDF saved to your attachment folder — only if you click the link to add it.

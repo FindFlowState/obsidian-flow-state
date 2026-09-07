@@ -2,7 +2,11 @@ import { App, PluginSettingTab, Setting, Notice, ButtonComponent } from "obsidia
 import type FlowStatePlugin from "./main";
 import type { Route } from "./types";
 import { DEFAULT_SUPABASE_URL, DEFAULT_SUPABASE_ANON_KEY } from "./config";
-import { getSupabase, getCurrentSession, signOut as supaSignOut, sendMagicLink, listObsidianRoutes, deleteRoute, fetchRouteById, fetchUserCredits } from "./supabase";
+import { openWelcomeScreenNow } from "./firstRun";
+import { getSupabase, getCurrentSession, signOut as supaSignOut, sendMagicLink, verifyEmailOtp, listObsidianRoutes, listRecentJobs, deleteRoute, fetchRouteById, fetchUserCredits } from "./supabase";
+import { formatRelativeTime } from "./time";
+import { GetAppModal } from "./getAppModal";
+import { openUploadModal } from "./uploadModal";
 import { renderRouteEditor } from "./routeEditor";
 import { errorMessage } from "./logger";
 import { confirmModal } from "./confirmModal";
@@ -18,6 +22,20 @@ export type PluginSettings = {
   // plugin updates/reloads (Obsidian doesn't reliably persist localStorage,
   // especially on mobile). Backs the custom auth storage adapter in supabase.ts.
   authStore?: Record<string, string>;
+  // First-run onboarding modal was shown (or dismissed) once already
+  onboardingDismissed?: boolean;
+  // Account ids that already went through first-sign-in starter setup
+  starterSetupUsers?: string[];
+  // The one-time "your first note just landed" notice was already shown
+  firstSyncNoticeShown?: boolean;
+  // An admin/dev account (see ADMIN_EMAILS) has signed in on this vault, so
+  // the dev-only command is exposed. Recomputed on every sign-in, and kept
+  // across sign-out so the onboarding replay is reachable while signed out.
+  isAdmin?: boolean;
+  // A dev onboarding replay is mid-flight. Persisted because the magic-link
+  // route leaves Obsidian and comes back, and the post-sign-in half has to know
+  // it should still run even in a vault that already has flows.
+  devReplayPending?: boolean;
 };
 
 export const DEFAULT_SETTINGS: PluginSettings = {
@@ -25,12 +43,36 @@ export const DEFAULT_SETTINGS: PluginSettings = {
   supabaseAnonKey: "",
   routes: {},
   lastUserId: "",
-  authStore: {}
+  authStore: {},
+  onboardingDismissed: false,
+  starterSetupUsers: [],
+  firstSyncNoticeShown: false,
+  isAdmin: false,
+  devReplayPending: false
 };
 
+type SettingsTab = "capture" | "flows" | "history";
+
+const SETTINGS_TABS: { id: SettingsTab; label: string }[] = [
+  { id: "capture", label: "Capture" },
+  { id: "flows", label: "Flows" },
+  { id: "history", label: "History" },
+];
+
 export class FlowStateSettingTab extends PluginSettingTab {
+  // Which top-level tab of the settings pane is showing. Capture leads: it's
+  // what a new user needs first, and the only part that works before any flow
+  // exists. Instance state, so it survives the display() re-render on switch.
+  private activeTab: SettingsTab = "capture";
+  // Credits for this pane opening. undefined = not fetched yet; null = fetched,
+  // no data. Switching tabs re-renders via display(), so without this the
+  // balance would be refetched on every tab click; hide() clears it so the next
+  // time the pane is opened we go back to the server.
+  private creditsCache: Awaited<ReturnType<typeof fetchUserCredits>> | undefined = undefined;
   // undefined -> list view; null -> new project; Route -> edit existing
   private editingRoute: Route | null | undefined = undefined;
+  // Email we sent a sign-in code to; non-null renders the "enter code" state
+  private pendingOtpEmail: string | null = null;
   // Deferred project ID for deep link navigation
   private deferredProjectId: string | null = null;
   // Generation counter to cancel stale async renders
@@ -60,6 +102,12 @@ export class FlowStateSettingTab extends PluginSettingTab {
   openNewProject(): void {
     this.editingRoute = null;
     this.display();
+  }
+
+  hide(): void {
+    // Next opening of the pane should show a fresh balance
+    this.creditsCache = undefined;
+    super.hide();
   }
 
   display(): void {
@@ -98,14 +146,40 @@ export class FlowStateSettingTab extends PluginSettingTab {
     }
 
     containerEl.empty();
+    // Scopes our settings-tab overrides so they can't leak into other plugins' tabs
+    containerEl.addClass("fs-settings-tab");
 
     // Flowstate title (plain text, styled like other plugins)
     containerEl.createEl("div", { text: "Flowstate", cls: "fs-settings-title" });
 
-    // Intro text with Learn more link on same line
+    // Intro text with Learn more link on same line. "Learn more" reopens the
+    // welcome screen — it's an ephemeral view, so this is the only way back to
+    // it once the tab is closed (the site link lives at the foot of that screen).
     const intro = containerEl.createEl("div", { cls: "fs-intro" });
     intro.appendText("Your handwriting and voice, transcribed and filed in Obsidian. ");
-    intro.createEl("a", { text: "Learn more →", href: "https://seekflowstate.com", cls: "fs-muted-link" });
+    const learnMore = intro.createEl("a", { text: "Learn more →", href: "#", cls: "fs-muted-link" });
+    learnMore.addEventListener("click", (e) => {
+      e.preventDefault();
+      void (async () => {
+        // The welcome screen describes an account that exists — the starter
+        // flow, the flow's email address, a sample note it can write — so it's
+        // only shown once signed in. Signed out, this link means what it does
+        // in the onboarding modal: the website.
+        const supabase = getSupabase(this.settings);
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) {
+          window.open("https://seekflowstate.com", "_blank");
+          return;
+        }
+        // The welcome screen opens in a workspace tab behind this modal, so
+        // close settings or the user never sees it (same pattern as the
+        // recent-uploads rows below).
+        try {
+          (this.app as unknown as { setting: { close(): void } }).setting.close();
+        } catch { /* best-effort */ }
+        await openWelcomeScreenNow(this.plugin);
+      })();
+    });
 
     // How it works bullets (will be hidden when signed in)
     const bulletsSection = containerEl.createDiv({ cls: "fs-onboarding-bullets" });
@@ -125,13 +199,14 @@ export class FlowStateSettingTab extends PluginSettingTab {
       bulletList.createEl("li", { text: bullet });
     }
 
-    // Unified connect section: email + connect/logout button
-    // Place both rows inside a fixed wrapper so async rendering preserves order
+    // Unified connect section: email/code entry when signed out, account row
+    // when signed in. Placed inside a fixed wrapper so async rendering
+    // preserves order.
     let emailValue = "";
     const authSection = containerEl.createDiv();
     const connectSetting = new Setting(authSection)
-      .setName("Sign Up / Sign In");
-    connectSetting.setDesc("Enter your email to get started");
+      .setName("Sign up or sign in");
+    connectSetting.setDesc("Enter your email and we'll send you a sign-in code. New accounts start with 25 free credits.");
 
     void (async () => {
       try {
@@ -147,51 +222,35 @@ export class FlowStateSettingTab extends PluginSettingTab {
           await this.plugin.saveData(this.settings);
         }
 
-        // Update UI based on sign-in state
         if (isSignedIn) {
           const signedInEmail = session?.user?.email ?? "";
-          emailValue = signedInEmail;
-          // Hide onboarding bullets when signed in
+          this.pendingOtpEmail = null;
+          // Hide onboarding bullets and the sign-in row when signed in
           bulletsSection.addClass("fs-hidden");
-          // Show prominent connected status
-          connectSetting.setName("Account");
-          connectSetting.setDesc("");
-          // Add status indicator
-          const statusEl = connectSetting.descEl.createDiv({ cls: "fs-status-row" });
-          statusEl.createSpan({ cls: "fs-status-dot" });
-          statusEl.createSpan({ text: `Connected as ${signedInEmail}`, cls: "fs-muted-text" });
-        } else {
-          // Create email field for sign-in
-          connectSetting.addText((t) => {
-            t.setPlaceholder("you@example.com");
-            t.onChange((v) => { emailValue = v.trim(); });
-            // Allow Enter key to submit
-            t.inputEl.addEventListener("keydown", (e) => {
-              if (e.key === "Enter") {
-                e.preventDefault();
-                void submitAuth();
-              }
-            });
-          });
-        }
+          connectSetting.settingEl.addClass("fs-hidden");
 
-        // Shared auth submit handler
-        const submitAuth = async () => {
-          try {
-            const url = DEFAULT_SUPABASE_URL;
-            const key = DEFAULT_SUPABASE_ANON_KEY;
-            if (!url || !key) {
-              new Notice("Supabase config missing. Rebuild plugin with env set.");
-              return;
-            }
-            if (isSignedIn) {
-              // Confirm before logging out
+          // Compact account bar: status + email + credits chip, Manage / Log out
+          const bar = authSection.createDiv({ cls: "fs-account-bar" });
+          const info = bar.createDiv({ cls: "fs-account-info" });
+          info.createSpan({ cls: "fs-status-dot" });
+          info.createSpan({ text: signedInEmail, cls: "fs-account-email" });
+          const creditsChip = info.createSpan({ text: "…", cls: "fs-credits-chip" });
+          const actions = bar.createDiv({ cls: "fs-account-actions" });
+          const manageBtn = new ButtonComponent(actions);
+          manageBtn.setButtonText("Manage credits");
+          manageBtn.onClick(() => {
+            window.open("https://app.startflow.ing/credits", "_blank");
+          });
+          const logoutBtn = new ButtonComponent(actions);
+          logoutBtn.setButtonText("Log out");
+          logoutBtn.onClick(async () => {
+            try {
               const confirmLogout = await confirmModal(this.app, {
-              title: "Log out",
-              message: "Are you sure you want to log out of Flowstate?",
-              cta: "Log out",
-              warning: true,
-            });
+                title: "Log out",
+                message: "Are you sure you want to log out of Flowstate?",
+                cta: "Log out",
+                warning: true,
+              });
               if (!confirmLogout) return;
               await supaSignOut(supabase);
               // Clear cached routes, user id, and vault connection on logout so we
@@ -202,26 +261,138 @@ export class FlowStateSettingTab extends PluginSettingTab {
               await this.plugin.saveData(this.settings);
               new Notice("Signed out");
               this.display();
-              return;
+            } catch (e: unknown) {
+              console.error(e);
+              new Notice(`Sign-out failed: ${errorMessage(e)}`);
             }
-            // Magic Link flow requires an email
-            if (!emailValue) {
-              new Notice("Enter your email to receive a Magic Link");
-              return;
+          });
+
+          // Fill the credits chip (breakdown lives in the hover title; full
+          // management is in the web app)
+          try {
+            let credits = this.creditsCache;
+            if (credits === undefined) {
+              credits = await fetchUserCredits(supabase);
+              if (this.displayGeneration !== generation) return;
+              this.creditsCache = credits;
             }
-            const redirectTo = "obsidian://flow-state";
-            await sendMagicLink(supabase, emailValue, redirectTo);
-            new Notice(`Magic link sent to ${emailValue}`);
-          } catch (e: unknown) {
-            console.error(e);
-            new Notice(`${isSignedIn ? "Sign-out" : "Magic link"} failed: ${errorMessage(e)}`);
+            if (credits) {
+              if (credits.subscription_plan === "unlimited") {
+                creditsChip.setText("Unlimited");
+                creditsChip.addClass("fs-badge-accent");
+              } else {
+                const total = (credits.subscription_credits ?? 0) + (credits.purchased_credits ?? 0);
+                creditsChip.setText(`${total} credit${total === 1 ? "" : "s"}`);
+                creditsChip.setAttribute(
+                  "title",
+                  `Subscription: ${credits.subscription_credits ?? 0} (rolls over while subscribed) · Top-ups: ${credits.purchased_credits ?? 0} (never expire)`
+                );
+              }
+            } else {
+              creditsChip.setText("");
+            }
+          } catch (creditsErr) {
+            console.error("Failed to load credits:", creditsErr);
+            creditsChip.setText("");
           }
+          return;
+        }
+
+        // ---- Signed out ----
+        const configOk = () => {
+          if (!DEFAULT_SUPABASE_URL || !DEFAULT_SUPABASE_ANON_KEY) {
+            new Notice("Supabase config missing. Rebuild plugin with env set.");
+            return false;
+          }
+          return true;
         };
 
-        const actionRow = connectSetting.controlEl.createDiv();
-        const btn = new ButtonComponent(actionRow);
-        btn.setButtonText(isSignedIn ? "Log out" : "Connect");
-        btn.onClick(submitAuth);
+        if (this.pendingOtpEmail) {
+          // Code-entry state: a sign-in code was emailed; verify it here. The
+          // magic link in the same email still works via the deep-link handler.
+          const pendingEmail = this.pendingOtpEmail;
+          connectSetting.setName("Enter your code");
+          connectSetting.setDesc(
+            createFragment((f) => {
+              f.appendText("We sent a sign-in code to ");
+              f.createEl("strong", { text: pendingEmail });
+              f.appendText(". Type it below, or click the link (just make sure if you click, it's on this device).");
+            })
+          );
+
+          let codeValue = "";
+          const verify = async () => {
+            if (!codeValue) {
+              new Notice("Enter the code from your email");
+              return;
+            }
+            try {
+              await verifyEmailOtp(supabase, pendingEmail, codeValue);
+              this.pendingOtpEmail = null;
+              new Notice("HUZZAH! Welcome to Flowstate!");
+              await this.plugin.handleSignedIn();
+            } catch (e: unknown) {
+              console.error(e);
+              new Notice(`That code didn't work: ${errorMessage(e)}`);
+            }
+          };
+
+          connectSetting.addText((t) => {
+            t.setPlaceholder("6-digit code");
+            t.onChange((v) => { codeValue = v.trim(); });
+            t.inputEl.inputMode = "numeric";
+            t.inputEl.addEventListener("keydown", (e) => {
+              if (e.key === "Enter") { e.preventDefault(); void verify(); }
+            });
+          });
+          connectSetting.addButton((b) => b.setCta().setButtonText("Sign in").onClick(() => void verify()));
+
+          const links = authSection.createDiv({ cls: "fs-auth-links" });
+          const resend = links.createEl("a", { text: "Resend code", cls: "fs-muted-link" });
+          resend.addEventListener("click", (e) => {
+            e.preventDefault();
+            void (async () => {
+              try {
+                await sendMagicLink(supabase, pendingEmail, "obsidian://flow-state");
+                new Notice(`Code re-sent to ${pendingEmail}`);
+              } catch (err: unknown) {
+                new Notice(`Couldn't resend: ${errorMessage(err)}`);
+              }
+            })();
+          });
+          const change = links.createEl("a", { text: "Use a different email", cls: "fs-muted-link" });
+          change.addEventListener("click", (e) => {
+            e.preventDefault();
+            this.pendingOtpEmail = null;
+            this.display();
+          });
+          return;
+        }
+
+        // Email-entry state
+        const sendCode = async () => {
+          if (!configOk()) return;
+          if (!emailValue || !emailValue.includes("@")) {
+            new Notice("Enter your email address first");
+            return;
+          }
+          try {
+            await sendMagicLink(supabase, emailValue, "obsidian://flow-state");
+            this.pendingOtpEmail = emailValue;
+            this.display();
+          } catch (e: unknown) {
+            console.error(e);
+            new Notice(`Couldn't send the code: ${errorMessage(e)}`);
+          }
+        };
+        connectSetting.addText((t) => {
+          t.setPlaceholder("you@example.com");
+          t.onChange((v) => { emailValue = v.trim(); });
+          t.inputEl.addEventListener("keydown", (e) => {
+            if (e.key === "Enter") { e.preventDefault(); void sendCode(); }
+          });
+        });
+        connectSetting.addButton((b) => b.setCta().setButtonText("Send code").onClick(() => void sendCode()));
       } catch (e) {
         // Surface minimal info but keep UI rendering
         console.error(e);
@@ -258,31 +429,61 @@ export class FlowStateSettingTab extends PluginSettingTab {
           return;
         }
 
-        // Projects section (collapsible, open by default)
-        containerEl.createDiv({ cls: "fs-divider" });
+        // Top-level tabs. Every section still renders (and fetches) as before;
+        // the inactive ones are just hidden, which keeps the interleaved async
+        // flow below untouched. The tab label replaces each section's heading.
+        const tabBar = containerEl.createDiv({ cls: "fs-tabs" });
+        for (const tab of SETTINGS_TABS) {
+          const btn = tabBar.createEl("button", { cls: "fs-tab", text: tab.label });
+          if (this.activeTab === tab.id) {
+            btn.addClass("fs-tab-active");
+            btn.setAttribute("aria-current", "page");
+          }
+          btn.addEventListener("click", () => {
+            if (this.activeTab === tab.id) return;
+            this.activeTab = tab.id;
+            this.display();
+          });
+        }
+        const captureHost = containerEl.createDiv();
+        const flowsHost = containerEl.createDiv();
+        const historyHost = containerEl.createDiv();
+        if (this.activeTab !== "capture") captureHost.addClass("fs-hidden");
+        if (this.activeTab !== "flows") flowsHost.addClass("fs-hidden");
+        if (this.activeTab !== "history") historyHost.addClass("fs-hidden");
 
-        const projectsSection = containerEl.createDiv({ cls: "fs-projects-section" });
-        const projectsHeaderRow = projectsSection.createDiv({ cls: "fs-section-header-row" });
+        // Capture — how notes get INTO Flowstate (the part that happens
+        // outside Obsidian).
+        const captureBody = captureHost.createDiv();
 
-        const projectsArrow = projectsHeaderRow.createSpan({ text: "▾", cls: "fs-section-arrow" });
-        projectsHeaderRow.createEl("div", { text: "Flows", cls: "fs-section-title" });
+        // Upload row — capture directly from Obsidian
+        const uploadSetting = new Setting(captureBody)
+          .setName("Upload a file")
+          .setDesc("Send handwriting or audio from this computer: images, PDFs, and audio files.");
+        uploadSetting.settingEl.addClass("fs-setting-flush");
+        uploadSetting.addButton((b) =>
+          b.setCta().setButtonText("Upload").onClick(() => {
+            openUploadModal(this.app, this.plugin);
+          })
+        );
 
-        const projectsBody = projectsSection.createDiv();
-        let projectsOpen = true;
+        // Mobile app row — QR + links live in a modal behind the button
+        const appSetting = new Setting(captureBody)
+          .setName("Flowstate app")
+          .setDesc("Snap handwritten pages or record voice memos, then send them straight to this vault.");
+        appSetting.settingEl.addClass("fs-setting-flush");
+        appSetting.addButton((b) =>
+          b.setButtonText("Get the app").onClick(() => {
+            new GetAppModal(this.app).open();
+          })
+        );
 
-        const updateProjectsVisibility = () => {
-          projectsBody.toggleClass("fs-hidden", !projectsOpen);
-          projectsArrow.textContent = projectsOpen ? "▾" : "▸";
-        };
-        projectsHeaderRow.addEventListener("click", () => {
-          projectsOpen = !projectsOpen;
-          updateProjectsVisibility();
-        });
-        updateProjectsVisibility();
+        // Flows
+        const projectsBody = flowsHost.createDiv();
 
-        // Projects description and buttons
+        // Flows description and buttons
         const header = new Setting(projectsBody)
-          .setDesc("Flows describe how to transcribe and save your uploads.");
+          .setDesc("Flows let you choose how to transcribe different types of notes and where to save them.");
         header.settingEl.addClass("fs-setting-flush");
         header.addButton((b) =>
           b.setButtonText("Refresh").onClick(() => this.display())
@@ -415,92 +616,79 @@ export class FlowStateSettingTab extends PluginSettingTab {
         if (this.displayGeneration !== generation) return;
         renderRows(valid);
 
-        // Credits section (collapsible, collapsed by default)
-        containerEl.createDiv({ cls: "fs-divider" });
-
-        // Collapsible header
-        const creditsSection = containerEl.createDiv({ cls: "fs-credits-section" });
-        const creditsHeaderRow = creditsSection.createDiv({ cls: "fs-section-header-row" });
-
-        const creditsArrow = creditsHeaderRow.createSpan({ text: "▸", cls: "fs-section-arrow" });
-        creditsHeaderRow.createEl("div", { text: "Credits", cls: "fs-section-title" });
-        // Badge to show total credits in collapsed state
-        const creditsBadge = creditsHeaderRow.createSpan({ text: "", cls: "fs-credits-badge" });
-
-        const creditsBody = creditsSection.createDiv();
-        let creditsOpen = false;
-
-        const updateCreditsVisibility = () => {
-          creditsBody.toggleClass("fs-hidden", !creditsOpen);
-          creditsArrow.textContent = creditsOpen ? "▾" : "▸";
-        };
-        creditsHeaderRow.addEventListener("click", () => {
-          creditsOpen = !creditsOpen;
-          updateCreditsVisibility();
+        // Recent uploads — a tiny status strip, not a history view. Shows the
+        // last few jobs (in-flight, delivered, failed); everything older
+        // lives in the web app.
+        const recentHost = historyHost.createDiv({ cls: "fs-recent-list" });
+        recentHost.createDiv({ text: "Loading…", cls: "setting-item-description" });
+        const historyLinkRow = historyHost.createDiv({ cls: "fs-history-link" });
+        const historyLink = historyLinkRow.createEl("a", {
+          text: "Full history in the web app →",
+          cls: "fs-muted-link",
         });
-        updateCreditsVisibility();
-
-        const creditsHost = creditsBody.createDiv();
-        const creditsLoading = creditsHost.createDiv({ cls: "setting-item-description" });
-        creditsLoading.setText("Loading credits…");
+        historyLink.addEventListener("click", (e) => {
+          e.preventDefault();
+          window.open("https://app.startflow.ing/history", "_blank");
+        });
 
         try {
-          const credits = await fetchUserCredits(supabase);
+          const jobs = await listRecentJobs(supabase, connectionId, 5);
           // Bail out if a newer display() was called
           if (this.displayGeneration !== generation) return;
-          creditsHost.empty();
+          recentHost.empty();
 
-          if (credits) {
-            const isUnlimited = credits.subscription_plan === "unlimited";
-            const total = (credits.subscription_credits ?? 0) + (credits.purchased_credits ?? 0);
+          if (jobs.length === 0) {
+            recentHost.createDiv({
+              text: "Nothing here yet — send something and it'll show up.",
+              cls: "setting-item-description",
+            });
+          }
+          for (const job of jobs) {
+            const failed = !!job.has_error;
+            const delivered = job.status === "delivered";
+            const row = recentHost.createDiv({ cls: "fs-recent-row" });
+            row.createSpan({
+              cls: `fs-recent-dot ${failed ? "fs-dot-error" : delivered ? "fs-dot-ok" : "fs-dot-pending"}`,
+            });
+            const info = row.createDiv({ cls: "fs-recent-info" });
+            const title = job.final_title
+              || (job.original_filename ? job.original_filename.replace(/\.[^/.]+$/, "") : "Untitled");
+            info.createDiv({ text: title, cls: "fs-recent-title" });
+            const statusLabel = failed
+              ? (job.error_message || "Failed")
+              : delivered ? "Delivered"
+              : job.status === "transcribed" ? "Syncing…"
+              : "Processing…";
+            info.createDiv({
+              text: `${statusLabel} · ${formatRelativeTime(job.created_at)}`,
+              cls: `fs-recent-meta${failed ? " fs-error-text" : ""}`,
+            });
 
-            // Update collapsed header badge
-            if (isUnlimited) {
-              creditsBadge.setText("(Unlimited)");
-              creditsBadge.addClass("fs-badge-accent");
-            } else {
-              creditsBadge.setText(`(${total})`);
-            }
-
-            // Explanation text with Manage Credits button
-            const creditsDescSetting = new Setting(creditsHost)
-              .setDesc(isUnlimited
-                ? "You have an Unlimited plan. Upload as much as you want!"
-                : "Each page or minute of audio that you upload uses one credit. You get 50 free credits to get started. Need more? Upgrade your plan or buy top-ups.");
-            creditsDescSetting.settingEl.addClass("fs-setting-flush");
-            creditsDescSetting.addButton((b) =>
-              b.setCta()
-                .setButtonText("Manage Credits")
-                .onClick(() => {
-                  window.open("https://app.startflow.ing/credits", "_blank");
-                })
-            );
-
-            if (!isUnlimited) {
-              const totalSetting = new Setting(creditsHost)
-                .setName("Total Credits")
-                .setDesc(String(total));
-              totalSetting.settingEl.addClass("fs-credit-row");
-
-              const subscriptionSetting = new Setting(creditsHost)
-                .setName("Subscription Credits")
-                .setDesc(`${credits.subscription_credits ?? 0} (rolls over while subscribed)`);
-              subscriptionSetting.settingEl.addClass("fs-credit-row");
-
-              const topupSetting = new Setting(creditsHost)
-                .setName("Top-up Credits")
-                .setDesc(`${credits.purchased_credits ?? 0} (never expire)`);
-              topupSetting.settingEl.addClass("fs-credit-row");
+            // Delivered rows open the note in the vault
+            const fileMatch = delivered && job.destination_url
+              ? job.destination_url.match(/file=([^&]+)/)
+              : null;
+            if (fileMatch) {
+              row.addClass("fs-recent-clickable");
+              row.addEventListener("click", () => {
+                let path = decodeURIComponent(fileMatch[1]);
+                while (path.startsWith("/")) path = path.slice(1);
+                try {
+                  (this.app as unknown as { setting: { close(): void } }).setting.close();
+                } catch { /* best-effort */ }
+                void this.app.workspace.openLinkText(path, "", false);
+              });
             }
           }
-        } catch (creditsErr) {
+        } catch (recentErr) {
           // Bail out if a newer display() was called
           if (this.displayGeneration !== generation) return;
-          console.error("Failed to load credits:", creditsErr);
-          creditsHost.empty();
-          const errorDiv = creditsHost.createDiv({ cls: "setting-item-description" });
-          errorDiv.setText("Failed to load credits");
-          errorDiv.addClass("fs-error-text");
+          console.error("Failed to load recent uploads:", recentErr);
+          recentHost.empty();
+          recentHost.createDiv({
+            text: "Couldn't load recent uploads",
+            cls: "setting-item-description fs-error-text",
+          });
         }
       } catch (e) {
         console.error(e);

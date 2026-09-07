@@ -2,12 +2,16 @@ import { Notice, Platform, Plugin, normalizePath, requestUrl, TFile } from "obsi
 import type { Job, Route } from "./types";
 import { FlowStateSettingTab, PluginSettings, DEFAULT_SETTINGS } from "./settings";
 import { getSupabase, createDataJsonAuthStorage, exchangeFromObsidianParams, fetchRouteById, ensureObsidianConnection, updateRoute } from "./supabase";
-import { DEFAULT_SUPABASE_URL, DEFAULT_SUPABASE_ANON_KEY } from "./config";
+import { DEFAULT_SUPABASE_URL, DEFAULT_SUPABASE_ANON_KEY, isAdminEmail } from "./config";
 import { ensureFolder, atomicWrite, writeBinaryToAttachments, buildSafeNoteFilename } from "./fs";
 import { parseFrontMatterConfig, resolveFrontMatter } from "./content";
 import { downloadFromStorage } from "./storage";
 import { log, warn, error, errorMessage } from "./logger";
 import { initSentry, captureException } from "./sentry";
+import { OnboardingModal } from "./onboarding";
+import { runFirstSignInSetup, openWelcomeScreenNow, firstDeliveryNoticeText, deliveryNoticeText } from "./firstRun";
+import { WelcomeView, WELCOME_VIEW_TYPE } from "./welcomeView";
+import { openUploadModal } from "./uploadModal";
 
 // Minimal shape of Obsidian's undocumented settings API used for deep links.
 type ObsidianSettingApi = { open(): Promise<void>; openTabById(id: string): void };
@@ -30,6 +34,8 @@ export default class FlowStatePlugin extends Plugin {
   private lastSyncCooldownStart = 0;
   // Cached connection id for THIS vault (see getMyConnectionId). Cleared on sign-out.
   private myConnectionId: string | null = null;
+  // First-run onboarding modal, when open (so sign-in via deep link can close it)
+  onboardingModal: OnboardingModal | null = null;
 
   async onload() {
     // Initialize Sentry error tracking (prod builds only)
@@ -53,11 +59,82 @@ export default class FlowStatePlugin extends Plugin {
     });
     this.addSettingTab(this.settingsTab);
 
+    // Welcome screen view (ephemeral — shows what a delivered note looks like
+    // without writing anything to the vault)
+    this.registerView(WELCOME_VIEW_TYPE, (leaf) => new WelcomeView(leaf, this));
+
     // Commands
     this.addCommand({
       id: "sync-now",
       name: "Sync Now",
       callback: () => this.syncNow(),
+    });
+
+    this.addCommand({
+      id: "upload-file",
+      name: "Upload a file",
+      callback: async () => {
+        const supabase = getSupabase(this.settings);
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) {
+          new Notice("Flowstate: sign in first — open Settings → Flowstate.");
+          return;
+        }
+        openUploadModal(this.app, this);
+      },
+    });
+
+    // Dev-only: replay first-run onboarding on demand. Hidden from the command
+    // palette unless an admin account has signed in on this vault
+    // (settings.isAdmin, refreshed on every sign-in) — normal users reach
+    // sign-in through Settings → Flowstate and the once-only intro modal.
+    // Dev-only: replay the whole first-run sequence, intro modal through
+    // welcome screen. Hidden from the command palette unless an admin account
+    // (settings.isAdmin) has signed in on this vault.
+    this.addCommand({
+      id: "onboarding-dev",
+      name: "Onboarding (dev)",
+      checkCallback: (checking: boolean) => {
+        if (!this.settings.isAdmin) return false;
+        if (checking) return true;
+        void this.replayOnboarding();
+        return true;
+      },
+    });
+
+    // Dev-only: jump straight to the welcome screen. The full replay above goes
+    // through sign-in; this skips it, so the screen (and the sample link on it)
+    // can be checked repeatedly without signing out and back in.
+    this.addCommand({
+      id: "onboarding-dev-welcome",
+      name: "Onboarding (dev): welcome screen",
+      checkCallback: (checking: boolean) => {
+        if (!this.settings.isAdmin) return false;
+        if (checking) return true;
+        void openWelcomeScreenNow(this);
+        return true;
+      },
+    });
+
+    // First-run onboarding: shown once when no account is signed in yet
+    this.app.workspace.onLayoutReady(() => {
+      void (async () => {
+        try {
+          await this.refreshAdminFlag();
+          if (this.settings.onboardingDismissed) return;
+          const supabase = getSupabase(this.settings);
+          const { data: { session } } = await supabase.auth.getSession();
+          if (session) {
+            // Existing signed-in users never need the intro
+            this.settings.onboardingDismissed = true;
+            await this.saveData(this.settings);
+            return;
+          }
+          this.openOnboarding();
+        } catch (e) {
+          warn("Onboarding check failed", e);
+        }
+      })();
     });
 
 
@@ -128,10 +205,7 @@ export default class FlowStatePlugin extends Plugin {
           try {
             const supabase = getSupabase(this.settings);
             await exchangeFromObsidianParams(supabase, params, "obsidian://flow-state");
-            // Refresh the cached vault connection id for the freshly signed-in account.
-            this.clearMyConnectionId();
-            this.myConnectionId = await ensureObsidianConnection(supabase, this.app);
-            this.settingsTab?.display();
+            await this.handleSignedIn();
           } catch (e: unknown) {
             error("OAuth exchange failed", e);
             new Notice(`Flowstate OAuth error: ${errorMessage(e)}`);
@@ -210,6 +284,7 @@ export default class FlowStatePlugin extends Plugin {
             log("deep-link sync: synced remaining jobs", { count: remaining.length });
 
             this.setStatus(`delivered ${allSyncedPaths.length} item${allSyncedPaths.length === 1 ? "" : "s"}`);
+            this.notifyDelivered(allSyncedPaths);
           } catch (e: unknown) {
             error("deep-link sync error", e);
             captureException(e, { context: "deepLinkSync" });
@@ -380,6 +455,9 @@ export default class FlowStatePlugin extends Plugin {
       this.setStatus("Syncing...");
       const paths = await this.syncOnce();
       this.setStatus(`delivered ${paths.length} item${paths.length === 1 ? "" : "s"}`);
+      // Deliveries are events the user cares about, so announce them even for
+      // silent background syncs (silent only suppresses errors/nagging).
+      this.notifyDelivered(paths);
       return paths;
     } catch (e: unknown) {
       error("Sync error", e);
@@ -413,6 +491,115 @@ export default class FlowStatePlugin extends Plugin {
   /** Forget the cached vault connection id (call on sign-out / account switch). */
   clearMyConnectionId(): void {
     this.myConnectionId = null;
+  }
+
+  /**
+   * Announce delivered notes. The very first synced note gets a longer,
+   * one-time notice (tracked in settings); later deliveries get a short count.
+   */
+  notifyDelivered(paths: string[]): void {
+    if (paths.length === 0) return;
+    if (!this.settings.firstSyncNoticeShown) {
+      this.settings.firstSyncNoticeShown = true;
+      void this.saveData(this.settings);
+      new Notice(firstDeliveryNoticeText(paths[paths.length - 1]), 10000);
+    } else {
+      new Notice(deliveryNoticeText(paths.length));
+    }
+  }
+
+  /**
+   * Recompute whether this vault has a dev/admin account signed in, which is
+   * what exposes the "Onboarding (dev)" command. Sticky across sign-out (a
+   * signed-out session leaves the flag as-is) so the replay stays reachable
+   * for exactly the case it exists for: testing the signed-out intro.
+   */
+  async refreshAdminFlag(): Promise<void> {
+    try {
+      const supabase = getSupabase(this.settings);
+      const { data: { session } } = await supabase.auth.getSession();
+      const email = session?.user?.email ?? null;
+      if (!email) return;
+      const isAdmin = isAdminEmail(email);
+      if (this.settings.isAdmin === isAdmin) return;
+      this.settings.isAdmin = isAdmin;
+      await this.saveSettings();
+    } catch (e) {
+      warn("refreshAdminFlag failed", e);
+    }
+  }
+
+  /**
+   * Dev-only: replay the entire first-run sequence from the top — intro modal,
+   * sign-in, sample-note offer, welcome screen.
+   *
+   * The two halves are joined by settings.devReplayPending rather than by
+   * awaiting anything, because sign-in may leave Obsidian entirely (magic link)
+   * and come back through the deep-link handler. handleSignedIn reads that flag
+   * and forces the post-sign-in half to run even though the vault already has
+   * flows; runOnboardingTail covers the already-signed-in case, where the modal
+   * closes without a sign-in to trigger it.
+   */
+  async replayOnboarding(): Promise<void> {
+    this.settings.onboardingDismissed = false;
+    this.settings.starterSetupUsers = [];
+    this.settings.firstSyncNoticeShown = false;
+    this.settings.devReplayPending = true;
+    await this.saveSettings();
+    this.openOnboarding();
+  }
+
+  /**
+   * Run the post-sign-in half of a dev replay (sample note + welcome screen)
+   * and clear the pending flag. No-op unless a replay is actually in flight.
+   */
+  async runOnboardingTail(): Promise<void> {
+    if (!this.settings.devReplayPending) return;
+    const supabase = getSupabase(this.settings);
+    const { data: { session } } = await supabase.auth.getSession();
+    // Still signed out: the replay is waiting on a sign-in that may yet arrive
+    // through the deep-link handler, so leave the flag set for handleSignedIn.
+    if (!session) return;
+    this.settings.devReplayPending = false;
+    await this.saveSettings();
+    await runFirstSignInSetup(this, { force: true });
+  }
+
+  /** Open the first-run onboarding modal (no-op if already open). */
+  openOnboarding(): void {
+    if (this.onboardingModal) return;
+    this.onboardingModal = new OnboardingModal(this);
+    this.onboardingModal.open();
+  }
+
+  /**
+   * Shared completion path for every sign-in route (emailed code, magic link
+   * deep link): refresh this vault's connection, run first-sign-in setup
+   * (starter flow + sample note offer), close the onboarding modal if it's open,
+   * and re-render settings.
+   */
+  async handleSignedIn(): Promise<void> {
+    const supabase = getSupabase(this.settings);
+    this.clearMyConnectionId();
+    try {
+      this.myConnectionId = await ensureObsidianConnection(supabase, this.app);
+    } catch (e) {
+      warn("handleSignedIn: failed to ensure vault connection", e);
+    }
+    await this.refreshAdminFlag();
+    // A dev replay forces the first-run step past the "this vault already has
+    // flows" check; a normal sign-in leaves that check in place.
+    const devReplay = this.settings.devReplayPending === true;
+    if (devReplay) {
+      this.settings.devReplayPending = false;
+      await this.saveSettings();
+    }
+    await runFirstSignInSetup(this, { force: devReplay });
+    if (this.onboardingModal) {
+      this.onboardingModal.markCompleted();
+      this.onboardingModal.close();
+    }
+    this.settingsTab?.display();
   }
 
   /** Fetch pending (transcribed) jobs for THIS vault's active Obsidian routes */

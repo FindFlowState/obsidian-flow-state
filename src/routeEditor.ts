@@ -138,7 +138,9 @@ export function renderRouteEditor(
 ) {
   // Helper to widen input area in a Setting row
   const applyWideControl = (s: Setting) => {
-    // Expand the control container
+    // Expand the control container, and let the row wrap so a narrow settings
+    // pane pushes the control below its label instead of squeezing the label away
+    s.settingEl.addClass("fs-wide-setting");
     s.controlEl.addClass("fs-wide-control");
   };
 

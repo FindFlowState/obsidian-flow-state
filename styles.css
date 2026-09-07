@@ -8,7 +8,12 @@
 .fs-error-text { color: var(--text-error); }
 
 /* ---- Route editor ---- */
-.fs-wide-control { flex-grow: 1; min-width: 450px; max-width: 100%; }
+/* Wide text controls. min-width alone squeezes .setting-item-info to zero in a
+   narrow settings pane and the field label disappears entirely; letting the row
+   wrap drops the control onto its own line instead, so the label always shows. */
+.fs-wide-setting { flex-wrap: wrap; row-gap: var(--size-4-2); }
+.fs-wide-setting .setting-item-info { min-width: 12em; }
+.fs-wide-control { flex-grow: 1; flex-basis: 450px; min-width: 0; max-width: 100%; }
 .fs-editor-header { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
 .fs-back-btn { padding: 4px 10px; font-size: 1em; line-height: 1; cursor: pointer; }
 .fs-editor-title { font-size: 1.6em; margin: 0; }
@@ -22,7 +27,25 @@
 .fs-button-group { display: flex; gap: 8px; }
 
 /* ---- Settings tab ---- */
-.fs-settings-title { font-size: 1.17em; font-weight: 600; margin-bottom: 8px; }
+/* Obsidian 1.13 insets section headings by --size-4-4 and setting cards by
+   --setting-items-padding-x, but blocks we draw ourselves sit flush at 0 —
+   which reads as a ragged left edge. Re-use Obsidian's own token so our
+   blocks line up with its headings under any theme. */
+.fs-settings-tab > .fs-settings-title,
+.fs-settings-tab > .fs-intro,
+.fs-settings-tab > .fs-onboarding-bullets,
+.fs-settings-tab .fs-account-bar,
+.fs-settings-tab .fs-recent-list,
+.fs-settings-tab .fs-history-link {
+  padding-inline: var(--size-4-4);
+}
+/* Section headings default to --font-ui-medium (15px), a hair above our 0.9em
+   body text — too close to read as a heading. Nudge the group-heading token
+   (scoped to this tab, so no other plugin's settings are touched). */
+.fs-settings-tab {
+  --setting-group-heading-size: calc(var(--font-ui-medium) * 1.15);
+}
+.fs-settings-title { font-size: var(--font-ui-large); font-weight: var(--font-bold); margin-bottom: 8px; }
 .fs-intro { font-size: 0.9em; margin-bottom: 16px; }
 .fs-muted-link { color: var(--text-muted); }
 .fs-onboarding-bullets { margin-bottom: 20px; }
@@ -30,18 +53,117 @@
 .fs-onboarding-list li { margin-bottom: 4px; }
 .fs-status-row { display: flex; align-items: center; gap: 6px; }
 .fs-status-dot { width: 8px; height: 8px; border-radius: 50%; background-color: var(--color-green); display: inline-block; }
-.fs-divider { border-top: 1px solid var(--background-modifier-border); margin: 16px 0 6px 0; }
-.fs-section-header-row { display: flex; align-items: center; gap: 6px; cursor: pointer; margin-top: 18px; margin-bottom: 6px; }
-.fs-section-arrow { font-size: 0.9em; }
-.fs-section-title { font-size: 1.5em; margin: 0; }
 .fs-setting-flush { border-top: none; padding-top: 0; margin-top: 0; }
 .fs-flow-item { border: 1px solid var(--background-modifier-border); border-radius: 6px; padding: 12px; margin-bottom: 8px; }
 .fs-flow-item .setting-item-name { font-size: 1em; }
 .fs-flow-item .setting-item-description { color: var(--text-muted); }
 .fs-archive-btn { background: transparent; border: 1px solid var(--text-muted); color: var(--text-normal); }
-.fs-credit-row { border-top: none; padding: 6px 0; }
-.fs-credits-badge { font-size: 0.85em; color: var(--text-muted); margin-left: 8px; }
 .fs-badge-accent { color: var(--interactive-accent); }
+
+/* ---- Account bar ---- */
+.fs-account-bar {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 10px 0 4px 0;
+}
+.fs-account-info { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.fs-account-email { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fs-credits-chip {
+  font-size: 0.8em;
+  background: var(--background-secondary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 999px;
+  padding: 2px 10px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+.fs-account-actions { display: flex; gap: 8px; flex-shrink: 0; }
+
+/* ---- Recent uploads ---- */
+.fs-recent-list { display: flex; flex-direction: column; gap: 4px; }
+.fs-recent-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 7px 10px;
+  border-radius: 6px;
+}
+.fs-recent-clickable { cursor: pointer; }
+.fs-recent-clickable:hover { background: var(--background-modifier-hover); }
+.fs-recent-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.fs-dot-ok { background: var(--color-green); }
+.fs-dot-pending { background: var(--color-yellow); }
+.fs-dot-error { background: var(--text-error); }
+.fs-recent-info { min-width: 0; }
+.fs-recent-title { font-size: 0.95em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fs-recent-meta { font-size: 0.8em; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fs-history-link { margin-top: 8px; font-size: 0.9em; }
+
+/* ---- Auth (code sign-in) ---- */
+.fs-auth-links { display: flex; gap: 16px; font-size: 0.85em; margin-top: 2px; }
+
+/* ---- Capture section ---- */
+.fs-capture-email { margin-top: 6px; }
+.fs-capture-email code { font-size: 0.95em; user-select: all; }
+.fs-qr-box { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.fs-qr-img { width: 84px; height: 84px; border-radius: 4px; }
+.fs-qr-caption { font-size: 0.7em; color: var(--text-muted); }
+
+/* ---- Welcome view ---- */
+.fs-welcome-view { padding: 32px 24px; overflow-y: auto; }
+.fs-welcome-inner { max-width: 700px; margin: 0 auto; font-size: 1.05em; line-height: 1.6; }
+
+/* ---- Sample note modal ---- */
+.fs-sample-fineprint { font-size: 0.85em; color: var(--text-muted); margin: 0 0 16px 0; }
+.fs-sample-buttons { display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px; }
+
+/* ---- Get the app modal ---- */
+.fs-getapp-modal { max-width: 420px; }
+.fs-getapp-qr { display: flex; flex-direction: column; align-items: center; gap: 6px; margin: 8px 0 16px 0; }
+.fs-getapp-qr-img { width: 168px; height: 168px; border-radius: 8px; }
+.fs-getapp-links p { margin: 6px 0; font-size: 0.95em; }
+
+/* ---- Upload modal ---- */
+.fs-upload-modal { max-width: 560px; }
+.fs-upload-list { margin: 4px 0 4px 0; display: flex; flex-direction: column; gap: 6px; }
+.fs-upload-row {
+  display: flex; align-items: center; gap: 10px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px; padding: 8px 12px;
+}
+.fs-upload-icon { font-size: 1.1em; }
+.fs-upload-info { flex: 1; min-width: 0; }
+.fs-upload-name { font-size: 0.95em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fs-upload-meta { font-size: 0.8em; color: var(--text-muted); }
+.fs-upload-remove { font-size: 0.85em; flex-shrink: 0; }
+.fs-upload-newflow { border-top: none; padding-top: 4px; }
+.fs-upload-instructions textarea { min-width: 260px; }
+.fs-upload-footer { margin-top: 14px; }
+.fs-upload-summary { margin-bottom: 4px; }
+.fs-upload-estimate { font-weight: 600; font-size: 0.95em; }
+.fs-upload-fineprint { font-size: 0.78em; color: var(--text-muted); margin-top: 2px; }
+
+/* ---- Onboarding modal ---- */
+.fs-ob-modal { max-width: 480px; }
+.fs-ob-tagline { color: var(--text-muted); margin: 0 0 16px 0; }
+.fs-ob-steps { display: flex; flex-direction: column; gap: 12px; margin-bottom: 16px; }
+.fs-ob-step { display: flex; gap: 12px; align-items: flex-start; }
+.fs-ob-step-num {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--interactive-accent);
+  color: var(--text-on-accent);
+  font-size: 0.85em;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.fs-ob-step-title { font-weight: 600; }
+.fs-ob-step-body { font-size: 0.9em; color: var(--text-muted); }
+.fs-ob-signin-label { font-size: 0.85em; color: var(--text-muted); margin: 0 0 6px 0; }
+.fs-ob-email-row { display: flex; gap: 8px; }
+.fs-ob-email-row input { flex: 1; }
+.fs-ob-links { display: flex; gap: 16px; font-size: 0.85em; margin-top: 12px; }
 
 /* ---- Note properties (front matter) editor ---- */
 .fs-fm-body { margin-top: 6px; }
@@ -56,3 +178,47 @@
 .fs-fm-preview-wrap { margin-top: 4px; }
 .fs-fm-preview-label { font-size: 0.85em; color: var(--text-muted); margin-bottom: 4px; }
 .fs-fm-preview { font-size: 0.85em; background: var(--background-secondary); border: 1px solid var(--background-modifier-border); border-radius: 6px; padding: 10px 12px; margin: 0; overflow-x: auto; }
+
+/* ---- Welcome screen sample CTA ---- */
+.fs-welcome-cta {
+  margin: 24px 0;
+  padding: 20px 22px;
+  border: 1px solid var(--background-modifier-border);
+  border-left: 3px solid var(--interactive-accent);
+  border-radius: 8px;
+  background: var(--background-secondary);
+}
+.fs-welcome-cta-body { color: var(--text-muted); margin-bottom: 14px; }
+.fs-welcome-cta-btn { cursor: pointer; }
+.fs-welcome-email { cursor: pointer; user-select: all; }
+.fs-welcome-email:hover { background: var(--background-modifier-hover); }
+
+/* ---- Settings tabs ---- */
+.fs-tabs {
+  display: flex;
+  gap: 2px;
+  margin: 4px 0 18px;
+  padding-inline: var(--size-4-4);
+  border-bottom: 1px solid var(--background-modifier-border);
+}
+.fs-tab {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  border-radius: 0;
+  padding: 8px 12px;
+  cursor: pointer;
+  color: var(--text-muted);
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+}
+.fs-tab:hover { background: transparent; color: var(--text-normal); }
+.fs-tab-active {
+  color: var(--text-normal);
+  font-weight: var(--font-semibold);
+  border-bottom-color: var(--interactive-accent);
+}
+
+/* ---- Welcome screen ----
+   Headings and lists are left to the reader's theme; nothing here restyles
+   typography or list markers. */
