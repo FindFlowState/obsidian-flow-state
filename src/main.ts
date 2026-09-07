@@ -9,6 +9,7 @@ import { downloadFromStorage } from "./storage";
 import { log, warn, error, errorMessage } from "./logger";
 import { initSentry, captureException } from "./sentry";
 import { OnboardingModal } from "./onboarding";
+import { SignInModal } from "./signInModal";
 import { runFirstSignInSetup, openWelcomeScreenNow, firstDeliveryNoticeText, deliveryNoticeText } from "./firstRun";
 import { WelcomeView, WELCOME_VIEW_TYPE } from "./welcomeView";
 import { openUploadModal } from "./uploadModal";
@@ -36,6 +37,8 @@ export default class FlowStatePlugin extends Plugin {
   private myConnectionId: string | null = null;
   // First-run onboarding modal, when open (so sign-in via deep link can close it)
   onboardingModal: OnboardingModal | null = null;
+  // Email sign-in modal, when open (same deal: magic-link sign-in closes it)
+  signInModal: SignInModal | null = null;
 
   async onload() {
     // Initialize Sentry error tracking (prod builds only)
@@ -573,6 +576,17 @@ export default class FlowStatePlugin extends Plugin {
   }
 
   /**
+   * Open the email sign-in modal (no-op if already open). With returnToIntro,
+   * closing it without signing in reopens the intro modal — used by the
+   * intro's own "Get started" button so its X acts as a back button.
+   */
+  openSignIn(opts: { returnToIntro?: boolean } = {}): void {
+    if (this.signInModal) return;
+    this.signInModal = new SignInModal(this, opts);
+    this.signInModal.open();
+  }
+
+  /**
    * Shared completion path for every sign-in route (emailed code, magic link
    * deep link): refresh this vault's connection, run first-sign-in setup
    * (starter flow + sample note offer), close the onboarding modal if it's open,
@@ -594,10 +608,20 @@ export default class FlowStatePlugin extends Plugin {
       this.settings.devReplayPending = false;
       await this.saveSettings();
     }
-    await runFirstSignInSetup(this, { force: devReplay });
+    const welcomeOpened = await runFirstSignInSetup(this, { force: devReplay });
+    // A signed-out welcome tab may be sitting open (the intro modal's "Learn
+    // more" path). For accounts that skip first-run setup, re-open it so it
+    // flips to its signed-in form with the flow email resolved.
+    if (!welcomeOpened && this.app.workspace.getLeavesOfType(WELCOME_VIEW_TYPE).length > 0) {
+      await openWelcomeScreenNow(this);
+    }
     if (this.onboardingModal) {
       this.onboardingModal.markCompleted();
       this.onboardingModal.close();
+    }
+    if (this.signInModal) {
+      this.signInModal.markCompleted();
+      this.signInModal.close();
     }
     this.settingsTab?.display();
   }

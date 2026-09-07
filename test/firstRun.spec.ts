@@ -31,7 +31,7 @@ vi.mock('../src/supabase', () => ({
   fetchUserHandle: async () => 'raj',
 }));
 
-import { runFirstSignInSetup, welcomeNoteContent, sampleNoteContent, installSampleNote, STARTER_FOLDER, SAMPLE_NOTE_TITLE, SAMPLE_ACTION_HREF } from '../src/firstRun';
+import { runFirstSignInSetup, welcomeNoteContent, sampleNoteContent, installSampleNote, STARTER_FOLDER, SAMPLE_NOTE_TITLE, SAMPLE_ACTION_HREF, BOTTOM_CTA_HREF } from '../src/firstRun';
 import { WELCOME_VIEW_TYPE } from '../src/welcomeView';
 import { Plugin } from './mocks/obsidian';
 
@@ -39,7 +39,12 @@ function makePlugin() {
   const plugin: any = new Plugin();
   plugin.settings = { routes: {}, starterSetupUsers: [] };
   const leaf = { setViewState: vi.fn(async () => {}) };
-  plugin.app.workspace = { getLeaf: vi.fn(() => leaf), openLinkText: vi.fn(async () => {}) };
+  plugin.app.workspace = {
+    getLeaf: vi.fn(() => leaf),
+    getLeavesOfType: vi.fn(() => []),
+    revealLeaf: vi.fn(async () => {}),
+    openLinkText: vi.fn(async () => {}),
+  };
   plugin.__leaf = leaf;
   plugin.getMyConnectionId = async () => 'conn-1';
   plugin.saveSettings = vi.fn(async () => {});
@@ -139,6 +144,31 @@ describe('welcomeNoteContent', () => {
   it('includes the flow email when known and omits the bullet when not', () => {
     expect(welcomeNoteContent('raj.inbox@in.example.com')).toContain('raj.inbox@in.example.com');
     expect(welcomeNoteContent(null)).not.toContain('Email a photo');
+  });
+
+  it('mentions the top-up packs in the credits section', () => {
+    const md = welcomeNoteContent(null);
+    expect(md).toContain('$5 for 100 credits, $10 for 300, or $20 for 1,000');
+  });
+
+  it('places a Get started section after Credits and before the sign-off, in both variants', () => {
+    for (const signedIn of [true, false]) {
+      const md = welcomeNoteContent(null, false, signedIn);
+      const heading = md.indexOf('## Get started');
+      const cta = md.indexOf(BOTTOM_CTA_HREF);
+      expect(heading).toBeGreaterThan(md.indexOf('## Credits'));
+      expect(cta).toBeGreaterThan(heading);
+      expect(cta).toBeLessThan(md.indexOf('Now go scribble something'));
+    }
+  });
+
+  it('only differs between variants in the Flows tense and the bottom CTA', () => {
+    const signedIn = welcomeNoteContent(null, false, true);
+    const signedOut = welcomeNoteContent(null, false, false);
+    expect(signedIn).toContain('We already made you a Flow');
+    expect(signedOut).toContain("When you sign up, we'll make you a Flow");
+    expect(signedIn).toContain(`[Upload a file](${BOTTOM_CTA_HREF})`);
+    expect(signedOut).toContain(`[Sign in](${BOTTOM_CTA_HREF})`);
   });
 
   it('puts Try it now, with the sample CTA, above the capture routes', () => {

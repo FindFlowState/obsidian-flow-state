@@ -161,19 +161,12 @@ export class FlowStateSettingTab extends PluginSettingTab {
     learnMore.addEventListener("click", (e) => {
       e.preventDefault();
       void (async () => {
-        // The welcome screen describes an account that exists — the starter
-        // flow, the flow's email address, a sample note it can write — so it's
-        // only shown once signed in. Signed out, this link means what it does
-        // in the onboarding modal: the website.
-        const supabase = getSupabase(this.settings);
-        const { data: { session } } = await supabase.auth.getSession();
-        if (!session) {
-          window.open("https://seekflowstate.com", "_blank");
-          return;
-        }
-        // The welcome screen opens in a workspace tab behind this modal, so
-        // close settings or the user never sees it (same pattern as the
-        // recent-uploads rows below).
+        // The welcome screen renders for signed-out readers too (sign-in CTA
+        // at the bottom), so this opens it regardless of session — same as
+        // the intro modal's Learn more button.
+        // It opens in a workspace tab behind this modal, so close settings or
+        // the user never sees it (same pattern as the recent-uploads rows
+        // below).
         try {
           (this.app as unknown as { setting: { close(): void } }).setting.close();
         } catch { /* best-effort */ }
