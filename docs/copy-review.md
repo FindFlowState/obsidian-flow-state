@@ -25,7 +25,7 @@ First screen — shown once on plugin load while signed out.
 | OB-6  | Step 2 body       | Upload a file, send in an email, or use the Flowstate app    |
 | OB-7  | Step 3 title      | See notes saved to your Vault, automatically                 |
 | OB-8  | Step 3 body       | Flowstate transcribes and saves them exactly where you want  |
-| OB-9  | Sign-in label     | Enter your email to get a login code                         |
+| OB-9  | Sign-in label     | Sign into Flowstate or create an account                     |
 | OB-10 | Email placeholder | you@example.com                                              |
 | OB-11 | CTA button        | Get started                                                  |
 

@@ -81,7 +81,7 @@ export class OnboardingModal extends Modal {
     });
 
     contentEl.createEl("p", {
-      text: "Enter your email to get a login code",
+      text: "Sign into Flowstate or create an account",
       cls: "fs-ob-signin-label",
     });
 
