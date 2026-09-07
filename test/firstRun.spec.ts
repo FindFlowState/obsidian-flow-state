@@ -20,6 +20,7 @@ vi.mock('../src/supabase', () => ({
   getSupabase: () => ({
     auth: {
       getUser: async () => ({ data: { user: currentUid ? { id: currentUid } : null }, error: null }),
+      getSession: async () => ({ data: { session: currentUid ? { user: { id: currentUid } } : null }, error: null }),
     },
   }),
   listObsidianRoutes: async () => existingRoutes,
@@ -31,7 +32,7 @@ vi.mock('../src/supabase', () => ({
   fetchUserHandle: async () => 'raj',
 }));
 
-import { runFirstSignInSetup, welcomeNoteContent, sampleNoteContent, installSampleNote, STARTER_FOLDER, SAMPLE_NOTE_TITLE, SAMPLE_ACTION_HREF, BOTTOM_CTA_HREF } from '../src/firstRun';
+import { runFirstSignInSetup, openWelcomeScreenNow, welcomeNoteContent, sampleNoteContent, installSampleNote, STARTER_FOLDER, SAMPLE_NOTE_TITLE, SAMPLE_ACTION_HREF, BOTTOM_CTA_HREF } from '../src/firstRun';
 import { WELCOME_VIEW_TYPE } from '../src/welcomeView';
 import { Plugin } from './mocks/obsidian';
 
@@ -129,6 +130,12 @@ describe('runFirstSignInSetup', () => {
     expect(plugin.__leaf.setViewState).not.toHaveBeenCalled();
   });
 
+  it('warms the flow-email cache so later opens come from local state', async () => {
+    const plugin = makePlugin();
+    await runFirstSignInSetup(plugin);
+    expect(plugin.settings.cachedFlowEmail).toBe('raj.inbox@in.example.com');
+  });
+
   it('is a no-op when not signed in', async () => {
     currentUid = null;
     const plugin = makePlugin();
@@ -137,6 +144,28 @@ describe('runFirstSignInSetup', () => {
     expect(delivered).toBe(false);
     expect(created).toHaveLength(0);
     expect(plugin.settings.starterSetupUsers).toHaveLength(0);
+  });
+});
+
+describe('openWelcomeScreenNow', () => {
+  it('opens immediately from the cached flow email, without waiting on the network', async () => {
+    const plugin = makePlugin();
+    plugin.settings.cachedFlowEmail = 'raj.inbox@in.example.com';
+    await openWelcomeScreenNow(plugin);
+    // First render comes straight from local state
+    expect(plugin.__leaf.setViewState).toHaveBeenCalledWith(
+      expect.objectContaining({ state: { flowEmail: 'raj.inbox@in.example.com', sampleAdded: false } })
+    );
+  });
+
+  it('shows no email when signed out and skips the backend entirely', async () => {
+    currentUid = null;
+    const plugin = makePlugin();
+    plugin.settings.cachedFlowEmail = 'stale@in.example.com';
+    await openWelcomeScreenNow(plugin);
+    expect(plugin.__leaf.setViewState).toHaveBeenCalledWith(
+      expect.objectContaining({ state: { flowEmail: null, sampleAdded: false } })
+    );
   });
 });
 

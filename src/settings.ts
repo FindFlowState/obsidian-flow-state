@@ -18,6 +18,10 @@ export type PluginSettings = {
   routes?: Record<string, Route>;
   // Last known signed-in user id to filter cached routes without awaiting auth
   lastUserId?: string;
+  // Last resolved flow ingest email (handle.slug@domain), so the welcome
+  // screen opens instantly from local state; refreshed in the background on
+  // each open and cleared on sign-out.
+  cachedFlowEmail?: string;
   // Supabase auth token storage, persisted in data.json so the session survives
   // plugin updates/reloads (Obsidian doesn't reliably persist localStorage,
   // especially on mobile). Backs the custom auth storage adapter in supabase.ts.
@@ -43,6 +47,7 @@ export const DEFAULT_SETTINGS: PluginSettings = {
   supabaseAnonKey: "",
   routes: {},
   lastUserId: "",
+  cachedFlowEmail: "",
   authStore: {},
   onboardingDismissed: false,
   starterSetupUsers: [],
@@ -250,6 +255,7 @@ export class FlowStateSettingTab extends PluginSettingTab {
               // don't show stale data (or scope to the previous account's connection).
               this.settings.routes = {};
               this.settings.lastUserId = "";
+              this.settings.cachedFlowEmail = "";
               this.plugin.clearMyConnectionId();
               await this.plugin.saveData(this.settings);
               new Notice("Signed out");
@@ -478,7 +484,7 @@ export class FlowStateSettingTab extends PluginSettingTab {
         // Mobile app row — QR + links live in a modal behind the button
         const appSetting = new Setting(captureBody)
           .setName("Flowstate app")
-          .setDesc("Snap handwritten pages or record voice memos, then send them straight to this vault.");
+          .setDesc("Snap photos of handwriting, record voice memos, or share files from other apps.");
         appSetting.settingEl.addClass("fs-setting-flush");
         appSetting.addButton((b) =>
           b.setButtonText("Get the app").onClick(() => {
