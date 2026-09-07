@@ -208,9 +208,9 @@ export function renderRouteEditor(
   // Foldable sections helper (default closed) with arrow indicator and extra spacing
   const addFoldableSection = (parent: HTMLElement, heading: string) => {
     const section = parent.createDiv({ cls: "fs-foldable-section" });
-    const header = section.createEl("div", { cls: "fs-section-header" });
-    const arrow = header.createEl("span", { text: "▸" });
-    header.createEl("span", { text: heading });
+    const header = section.createDiv({ cls: "fs-section-header" });
+    const arrow = header.createSpan({ text: "▸" });
+    header.createSpan({ text: heading });
     const body = section.createDiv({ cls: "fs-section-body" });
     let open = false;
     const update = () => {

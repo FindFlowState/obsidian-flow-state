@@ -77,7 +77,10 @@ const define = {
 
 const entry = resolve(projectRoot, 'src/main.ts');
 // Output locations:
-// - prod: emit main.js at project root (next to manifest.json)
+// - prod: dist/prod/main.js, plus a copy at the project root (next to
+//   manifest.json). The community-plugin review bot builds the repo and looks
+//   for main.js at the root (or dist/, build/, out/); dist/prod/ is one level
+//   too deep for it. Root main.js is gitignored.
 // - local: emit to dist/local/main.js
 const outDir = mode === 'prod'
   ? resolve(projectRoot, 'dist', devId ? 'prod-dev' : 'prod')
@@ -133,6 +136,13 @@ build(common).then(() => {
   const mapDst = join(outDir, 'main.js.map');
   if (existsSync(mapSrc)) {
     copyFileSync(mapSrc, mapDst);
+  }
+
+  // Prod: mirror main.js (+ map) to the project root for the review bot's
+  // build verification. styles.css and manifest.json already live there.
+  if (mode === 'prod') {
+    copyFileSync(outfile, resolve(projectRoot, 'main.js'));
+    if (existsSync(mapSrc)) copyFileSync(mapSrc, resolve(projectRoot, 'main.js.map'));
   }
 
   // Upload source maps to Sentry for prod builds (skip with --skip-sentry)

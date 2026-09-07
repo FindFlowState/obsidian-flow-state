@@ -3,6 +3,7 @@ import type FlowStatePlugin from "./main";
 import type { Route } from "./types";
 import { getSupabase, listObsidianRoutes, createProject, fetchUserCredits } from "./supabase";
 import { errorMessage } from "./logger";
+import { jpegToPdf } from "./pdf";
 
 // Mirrors the web app's upload surface (apps/web, Home.tsx + imageToPdf.ts):
 // same accepted types, same mixing rules, same start-flow → signed upload →
@@ -76,9 +77,8 @@ async function estimateCredits(file: File): Promise<number> {
   return 1; // one image = one page
 }
 
-/** Convert an image File to a single-page PDF (same convention as every other capture path). */
+/** Convert an image File to a single-page PDF sized to the image (the uploads bucket only takes PDF and audio). */
 async function imageToPdfFile(file: File): Promise<File> {
-  const { jsPDF } = await import("jspdf");
   const url = URL.createObjectURL(file);
   try {
     const img = await new Promise<HTMLImageElement>((resolve, reject) => {
@@ -90,7 +90,9 @@ async function imageToPdfFile(file: File): Promise<File> {
     const width = img.naturalWidth || img.width;
     const height = img.naturalHeight || img.height;
     if (!width || !height) throw new Error("Image has no dimensions.");
-    const canvas = activeDocument.createElement("canvas");
+    // Re-encode as JPEG on a white background so PNG transparency and any
+    // exotic source format collapse to something the PDF can embed directly.
+    const canvas = createEl("canvas");
     canvas.width = width;
     canvas.height = height;
     const ctx = canvas.getContext("2d");
@@ -98,22 +100,13 @@ async function imageToPdfFile(file: File): Promise<File> {
     ctx.fillStyle = "#ffffff";
     ctx.fillRect(0, 0, width, height);
     ctx.drawImage(img, 0, 0, width, height);
-    const dataUrl = canvas.toDataURL("image/jpeg", 0.92);
+    const jpeg = await new Promise<Blob>((resolve, reject) => {
+      canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("Could not encode image as JPEG."))), "image/jpeg", 0.92);
+    });
 
-    const doc = new jsPDF({ orientation: "portrait", unit: "pt", format: "a4" });
-    const pageW = doc.internal.pageSize.getWidth();
-    const pageH = doc.internal.pageSize.getHeight();
-    const margin = 36;
-    const boxW = pageW - margin * 2;
-    const boxH = pageH - margin * 2;
-    const aspect = width / height;
-    let drawW = boxW;
-    let drawH = drawW / aspect;
-    if (drawH > boxH) { drawH = boxH; drawW = drawH * aspect; }
-    doc.addImage(dataUrl, "JPEG", (pageW - drawW) / 2, (pageH - drawH) / 2, drawW, drawH);
-    const blob = doc.output("blob");
+    const pdf = jpegToPdf({ bytes: new Uint8Array(await jpeg.arrayBuffer()), width, height });
     const base = file.name.replace(/\.[^/.]+$/, "");
-    return new File([blob], `${base}.pdf`, { type: "application/pdf" });
+    return new File([pdf], `${base}.pdf`, { type: "application/pdf" });
   } finally {
     URL.revokeObjectURL(url);
   }

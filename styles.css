@@ -36,9 +36,14 @@
 .fs-settings-tab > .fs-onboarding-bullets,
 .fs-settings-tab .fs-account-bar,
 .fs-settings-tab .fs-recent-list,
-.fs-settings-tab .fs-history-link {
+.fs-settings-tab .fs-history-link,
+.fs-settings-tab .fs-flows-help,
+.fs-settings-tab .fs-flows-actions {
   padding-inline: var(--size-4-4);
 }
+/* Flows tab header: helper text as plain copy, actions on their own line. */
+.fs-flows-help { font-size: 0.9em; color: var(--text-muted); margin-bottom: 12px; }
+.fs-flows-actions { margin-bottom: 16px; }
 /* Section headings default to --font-ui-medium (15px), a hair above our 0.9em
    body text — too close to read as a heading. Nudge the group-heading token
    (scoped to this tab, so no other plugin's settings are touched). */
@@ -53,7 +58,13 @@
 .fs-onboarding-list li { margin-bottom: 4px; }
 .fs-status-row { display: flex; align-items: center; gap: 6px; }
 .fs-status-dot { width: 8px; height: 8px; border-radius: 50%; background-color: var(--color-green); display: inline-block; }
-.fs-setting-flush { border-top: none; padding-top: 0; margin-top: 0; }
+/* No divider above these rows. Top padding is left to Obsidian so the card's
+   inset is symmetric (zeroing it pinned the text to the card's top edge). */
+.fs-setting-flush { border-top: none; margin-top: 0; }
+/* Obsidian 1.13 top-aligns a setting's control against its info block. Our
+   Capture rows carry two-line descriptions, so the button sat a line above
+   the text's midpoint. Centre it on the row. */
+.fs-settings-tab .fs-setting-flush { align-items: center; }
 .fs-flow-item { border: 1px solid var(--background-modifier-border); border-radius: 6px; padding: 12px; margin-bottom: 8px; }
 .fs-flow-item .setting-item-name { font-size: 1em; }
 .fs-flow-item .setting-item-description { color: var(--text-muted); }
