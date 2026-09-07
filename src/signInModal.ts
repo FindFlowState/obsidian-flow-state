@@ -18,10 +18,15 @@ export class SignInModal extends Modal {
   private step: "email" | "code" = "email";
   private completed = false;
   private busy = false;
+  // Reached from the intro modal (rather than the welcome screen): closing
+  // without signing in goes back to the intro, so the X is a "back", not a
+  // dead end.
+  private returnToIntro: boolean;
 
-  constructor(plugin: FlowStatePlugin) {
+  constructor(plugin: FlowStatePlugin, opts: { returnToIntro?: boolean } = {}) {
     super(plugin.app);
     this.plugin = plugin;
+    this.returnToIntro = opts.returnToIntro === true;
   }
 
   /** Called when sign-in completed elsewhere (magic link deep link). */
@@ -37,10 +42,17 @@ export class SignInModal extends Modal {
   onClose(): void {
     this.contentEl.empty();
     if (this.plugin.signInModal === this) this.plugin.signInModal = null;
+    if (this.completed) return;
+    if (this.returnToIntro) {
+      // Backed out of the intro's sign-in path: resurface the intro so its
+      // two doors are still on the table. (Its own close then runs the tail.)
+      this.plugin.openOnboarding();
+      return;
+    }
     // Dev replay by an already-signed-in admin: no sign-in fires here to carry
     // the sequence on, so continue into the second half from the close instead.
     // A no-op when sign-in already ran it, or while still signed out.
-    if (!this.completed) void this.plugin.runOnboardingTail();
+    void this.plugin.runOnboardingTail();
   }
 
   private render(): void {

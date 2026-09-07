@@ -575,10 +575,14 @@ export default class FlowStatePlugin extends Plugin {
     this.onboardingModal.open();
   }
 
-  /** Open the email sign-in modal (no-op if already open). */
-  openSignIn(): void {
+  /**
+   * Open the email sign-in modal (no-op if already open). With returnToIntro,
+   * closing it without signing in reopens the intro modal — used by the
+   * intro's own "Get started" button so its X acts as a back button.
+   */
+  openSignIn(opts: { returnToIntro?: boolean } = {}): void {
     if (this.signInModal) return;
-    this.signInModal = new SignInModal(this);
+    this.signInModal = new SignInModal(this, opts);
     this.signInModal.open();
   }
 

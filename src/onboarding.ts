@@ -95,7 +95,7 @@ export class OnboardingModal extends Modal {
     cta.onClick(() => {
       this.routedOnward = true;
       this.close();
-      this.plugin.openSignIn();
+      this.plugin.openSignIn({ returnToIntro: true });
     });
   }
 }

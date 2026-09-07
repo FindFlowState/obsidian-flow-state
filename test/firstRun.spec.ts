@@ -168,7 +168,7 @@ describe('welcomeNoteContent', () => {
     expect(signedIn).toContain('We already made you a Flow');
     expect(signedOut).toContain("When you sign up, we'll make you a Flow");
     expect(signedIn).toContain(`[Upload a file](${BOTTOM_CTA_HREF})`);
-    expect(signedOut).toContain(`[Get started](${BOTTOM_CTA_HREF})`);
+    expect(signedOut).toContain(`[Sign in](${BOTTOM_CTA_HREF})`);
   });
 
   it('puts Try it now, with the sample CTA, above the capture routes', () => {

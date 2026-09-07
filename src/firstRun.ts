@@ -60,7 +60,7 @@ export const BOTTOM_CTA_HREF = "flowstate:bottom-cta";
  */
 export const GET_STARTED_CTA = {
   body: "Sign in or create an account — new accounts start with 25 free credits.",
-  button: "Get started",
+  button: "Sign in",
 } as const;
 
 export const UPLOAD_CTA = {
