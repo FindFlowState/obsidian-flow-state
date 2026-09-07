@@ -452,6 +452,21 @@ export class FlowStateSettingTab extends PluginSettingTab {
         if (this.activeTab !== "flows") flowsHost.addClass("fs-hidden");
         if (this.activeTab !== "history") historyHost.addClass("fs-hidden");
 
+        // History placeholder goes in right away. The jobs fetch has to wait
+        // for the connection id (resolved in the Flows section below), but
+        // the tab shouldn't sit blank while that happens.
+        const recentHost = historyHost.createDiv({ cls: "fs-recent-list" });
+        recentHost.createDiv({ text: "Loading…", cls: "setting-item-description" });
+        const historyLinkRow = historyHost.createDiv({ cls: "fs-history-link" });
+        const historyLink = historyLinkRow.createEl("a", {
+          text: "Full history in the web app →",
+          cls: "fs-muted-link",
+        });
+        historyLink.addEventListener("click", (e) => {
+          e.preventDefault();
+          window.open("https://app.startflow.ing/history", "_blank");
+        });
+
         // Capture — how notes get INTO Flowstate (the part that happens
         // outside Obsidian).
         const captureBody = captureHost.createDiv();
@@ -481,21 +496,23 @@ export class FlowStateSettingTab extends PluginSettingTab {
         // Flows
         const projectsBody = flowsHost.createDiv();
 
-        // Flows description and buttons
-        const header = new Setting(projectsBody)
-          .setDesc("Flows let you choose how to transcribe different types of notes and where to save them.");
-        header.settingEl.addClass("fs-setting-flush");
-        header.addButton((b) =>
-          b.setButtonText("Refresh").onClick(() => this.display())
-        );
-        header.addButton((b) =>
-          b.setCta()
-            .setButtonText("Add Flow")
-            .onClick(() => {
-              this.editingRoute = null;
-              this.display();
-            })
-        );
+        // Flows description as plain text (not a setting card), with the
+        // actions on their own line beneath it: primary action first.
+        projectsBody.createDiv({
+          cls: "fs-flows-help",
+          text: "Flows let you choose how to transcribe different types of notes and where to save them.",
+        });
+        const flowActions = projectsBody.createDiv({ cls: "fs-flows-actions fs-button-group" });
+        new ButtonComponent(flowActions)
+          .setCta()
+          .setButtonText("Add Flow")
+          .onClick(() => {
+            this.editingRoute = null;
+            this.display();
+          });
+        new ButtonComponent(flowActions)
+          .setButtonText("Refresh")
+          .onClick(() => this.display());
 
         // Projects list host and renderer
         const flowsListHost = projectsBody.createDiv({ cls: "fs-flows-list" });
@@ -578,6 +595,13 @@ export class FlowStateSettingTab extends PluginSettingTab {
         const connectionId = await this.plugin.getMyConnectionId();
         if (this.displayGeneration !== generation) return;
         if (!connectionId) return;
+        // Start the History fetch now, alongside the Flows fetch, rather than
+        // after it. Settled into a result object so an early return below
+        // can't leave a dangling rejection.
+        const recentJobs = listRecentJobs(supabase, connectionId, 5).then(
+          (jobs) => ({ jobs, error: null as unknown }),
+          (error: unknown) => ({ jobs: null, error }),
+        );
         const rows: Route[] = await listObsidianRoutes(supabase, connectionId);
         // Bail out if a newer display() was called
         if (this.displayGeneration !== generation) return;
@@ -618,23 +642,13 @@ export class FlowStateSettingTab extends PluginSettingTab {
 
         // Recent uploads — a tiny status strip, not a history view. Shows the
         // last few jobs (in-flight, delivered, failed); everything older
-        // lives in the web app.
-        const recentHost = historyHost.createDiv({ cls: "fs-recent-list" });
-        recentHost.createDiv({ text: "Loading…", cls: "setting-item-description" });
-        const historyLinkRow = historyHost.createDiv({ cls: "fs-history-link" });
-        const historyLink = historyLinkRow.createEl("a", {
-          text: "Full history in the web app →",
-          cls: "fs-muted-link",
-        });
-        historyLink.addEventListener("click", (e) => {
-          e.preventDefault();
-          window.open("https://app.startflow.ing/history", "_blank");
-        });
-
+        // lives in the web app. The host and placeholder were created up top.
         try {
-          const jobs = await listRecentJobs(supabase, connectionId, 5);
+          const recent = await recentJobs;
           // Bail out if a newer display() was called
           if (this.displayGeneration !== generation) return;
+          if (recent.jobs === null) throw recent.error;
+          const jobs = recent.jobs;
           recentHost.empty();
 
           if (jobs.length === 0) {
