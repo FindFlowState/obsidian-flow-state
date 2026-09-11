@@ -72,6 +72,34 @@ describe('syncOnce', () => {
     expect(paths).toHaveLength(1);
     expect(updates).toContainEqual(expect.objectContaining({ status: 'delivered' }));
   });
+
+  it('applies route settings changed outside the plugin instead of the cached copy', async () => {
+    // Cached copy (from an earlier sync) still says "include original file".
+    (plugin as any).settings.routes!['route1'] = baseRoute({ include_original_file: true });
+    const saved: any[] = [];
+    (plugin as any).saveData = async (d: any) => { saved.push(d); };
+    const download = vi.fn(async () => 'Inbox/scan.pdf');
+    (plugin as any).maybeDownloadOriginal = download;
+
+    // The pending job carries the current route row, where the toggle is now off.
+    const originalJob = jobs[0];
+    jobs[0] = {
+      ...originalJob,
+      original_file_url: 'https://example.com/scan.pdf',
+      routes: { ...baseRoute({ include_original_file: false }), connections: { service_type: 'obsidian' } },
+    };
+    try {
+      const paths = await (plugin as any).syncOnce();
+      expect(paths).toHaveLength(1);
+      expect(download).not.toHaveBeenCalled();
+      const cached = (plugin as any).settings.routes['route1'];
+      expect(cached.include_original_file).toBe(false);
+      expect(cached).not.toHaveProperty('connections');
+      expect(saved).toHaveLength(1);
+    } finally {
+      jobs[0] = originalJob;
+    }
+  });
 });
 
 describe('fetchPendingJobs', () => {

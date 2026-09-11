@@ -649,7 +649,34 @@ export default class FlowStatePlugin extends Plugin {
 
     if (jErr) throw jErr;
     log(`fetchPendingJobs: fetched ${items?.length ?? 0} job(s)`);
-    return items ?? [];
+    const jobs = items ?? [];
+    await this.refreshRouteCacheFromJobs(jobs);
+    return jobs;
+  }
+
+  /**
+   * Refresh the local route cache from the route rows joined onto pending jobs,
+   * so every sync pass applies the Flow's current settings. Flow settings
+   * (include original file, destination, append mode) can be changed from the
+   * mobile or web app; without this the plugin kept applying the copy cached in
+   * data.json until the settings tab was next opened.
+   */
+  async refreshRouteCacheFromJobs(items: Job[]): Promise<void> {
+    let changed = false;
+    for (const it of items) {
+      const joined = (it as Job & { routes?: unknown }).routes;
+      if (!joined || typeof joined !== "object") continue;
+      const row = { ...(joined as Route & { connections?: unknown }) };
+      delete row.connections;
+      if (!row.id || !row.destination_location) continue;
+      this.settings.routes = this.settings.routes || {};
+      this.settings.routes[row.id] = row;
+      changed = true;
+    }
+    if (changed) {
+      log("fetchPendingJobs: refreshed route cache from joined route rows");
+      await this.saveData(this.settings);
+    }
   }
 
   /** Write a single job to vault and ack it as delivered in the DB. Returns the written file path. */
