@@ -40,7 +40,7 @@ We built Flowstate with Obsidian in mind (because we're both power users), but i
 
 ## Human-friendly pricing
 
-Start with 50 free credits. One page of handwriting or one minute of audio is one credit. Subscribe for monthly credits that roll over, or grab top-up packs that never expire.
+Start with 25 free credits. One page of handwriting or one minute of audio is one credit. Need more? Grab a top-up pack. No subscriptions, and credits never expire.
 
 Built by two brothers from other mothers who still write by hand and wanted their pages to live in their favorite app.
 

@@ -69,7 +69,6 @@
 .fs-flow-item .setting-item-name { font-size: 1em; }
 .fs-flow-item .setting-item-description { color: var(--text-muted); }
 .fs-archive-btn { background: transparent; border: 1px solid var(--text-muted); color: var(--text-normal); }
-.fs-badge-accent { color: var(--interactive-accent); }
 
 /* ---- Account bar ---- */
 .fs-account-bar {

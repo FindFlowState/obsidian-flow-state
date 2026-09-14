@@ -266,8 +266,7 @@ export class FlowStateSettingTab extends PluginSettingTab {
             }
           });
 
-          // Fill the credits chip (breakdown lives in the hover title; full
-          // management is in the web app)
+          // Fill the credits chip (full management is in the web app)
           try {
             let credits = this.creditsCache;
             if (credits === undefined) {
@@ -276,17 +275,9 @@ export class FlowStateSettingTab extends PluginSettingTab {
               this.creditsCache = credits;
             }
             if (credits) {
-              if (credits.subscription_plan === "unlimited") {
-                creditsChip.setText("Unlimited");
-                creditsChip.addClass("fs-badge-accent");
-              } else {
-                const total = (credits.subscription_credits ?? 0) + (credits.purchased_credits ?? 0);
-                creditsChip.setText(`${total} credit${total === 1 ? "" : "s"}`);
-                creditsChip.setAttribute(
-                  "title",
-                  `Subscription: ${credits.subscription_credits ?? 0} (rolls over while subscribed) · Top-ups: ${credits.purchased_credits ?? 0} (never expire)`
-                );
-              }
+              const total = credits.purchased_credits ?? 0;
+              creditsChip.setText(`${total} credit${total === 1 ? "" : "s"}`);
+              creditsChip.setAttribute("title", "Credits never expire");
             } else {
               creditsChip.setText("");
             }
