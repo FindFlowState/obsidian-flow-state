@@ -126,7 +126,6 @@ class UploadModal extends Modal {
   private newFlowDest = "";
   private instructions = "";
   private balance: number | null = null;
-  private unlimited = false;
   private uploading = false;
   private fileInput: HTMLInputElement | null = null;
 
@@ -161,8 +160,7 @@ class UploadModal extends Modal {
         }
         const credits = await fetchUserCredits(supabase);
         if (credits) {
-          this.unlimited = credits.subscription_plan === "unlimited";
-          this.balance = (credits.subscription_credits ?? 0) + (credits.purchased_credits ?? 0);
+          this.balance = credits.purchased_credits ?? 0;
         }
       } catch (e) {
         console.error("upload modal: failed to load flows/credits", e);
@@ -304,14 +302,12 @@ class UploadModal extends Modal {
     if (this.picked.length > 0) {
       const est = this.totalEstimate();
       const estTxt = est === null ? "…" : String(est);
-      const balanceTxt = this.unlimited
-        ? "you have Unlimited"
-        : this.balance === null ? "" : `you have ${this.balance}`;
+      const balanceTxt = this.balance === null ? "" : `you have ${this.balance}`;
       summary.createSpan({
         text: `Estimated credits: ${estTxt}${balanceTxt ? ` · ${balanceTxt}` : ""}`,
         cls: "fs-upload-estimate",
       });
-      if (!this.unlimited && est !== null && this.balance !== null && est > this.balance) {
+      if (est !== null && this.balance !== null && est > this.balance) {
         summary.createDiv({ text: "That's more than your balance — the upload may not finish. Top up in Credits below.", cls: "fs-inline-error" });
       }
       summary.createDiv({
