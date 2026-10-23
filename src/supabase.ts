@@ -1,10 +1,10 @@
-import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { createClient, type Session, type SupabaseClient } from "@supabase/supabase-js";
 import type { Database, Route, RouteInsert, RouteUpdate } from "./types";
 import { FileSystemAdapter, Platform } from "obsidian";
 import type { App } from "obsidian";
 import type { PluginSettings } from "./settings";
 import { DEFAULT_SUPABASE_URL, DEFAULT_SUPABASE_ANON_KEY } from "./config";
-import { log } from "./logger";
+import { log, warn } from "./logger";
 
 // Shape of the connections.metadata JSON we read/write for Obsidian connections.
 type ConnectionMetadata = {
@@ -299,6 +299,52 @@ export async function getCurrentSession(supabase: SupabaseClient<Database>) {
   const { data, error } = await supabase.auth.getSession();
   if (error) throw error;
   return data.session ?? null;
+}
+
+/** How long a UI render waits on the session check before treating the user as signed out. */
+export const SESSION_CHECK_TIMEOUT_MS = 10_000;
+
+/**
+ * The current session, or null when there isn't a usable one — for UI code
+ * that has to draw *something* either way.
+ *
+ * `getSession()` doesn't just read storage: an expired access token makes it
+ * refresh first, and a rejected refresh (token revoked by a sign-out elsewhere,
+ * or a network failure while offline) comes back as an error rather than a
+ * session. Treating that as "throw and render nothing" left the settings tab
+ * with a sign-in heading but no email field or button. A dead session is a
+ * signed-out user; so is one we can't check within `timeoutMs` (the auth lock
+ * can stall when several Obsidian windows share it). Either way the sign-in
+ * form has to appear.
+ */
+export async function loadSessionOrNull(
+  supabase: SupabaseClient<Database>,
+  timeoutMs: number = SESSION_CHECK_TIMEOUT_MS
+): Promise<Session | null> {
+  let timer: number | undefined;
+  const timeout = new Promise<null>((resolve) => {
+    timer = window.setTimeout(() => {
+      warn("session check timed out; rendering as signed out", { timeoutMs });
+      resolve(null);
+    }, timeoutMs);
+  });
+  try {
+    return await Promise.race([
+      supabase.auth.getSession().then(({ data, error }) => {
+        if (error) {
+          warn("session unavailable; rendering as signed out", error.message);
+          return null;
+        }
+        return data.session ?? null;
+      }),
+      timeout,
+    ]);
+  } catch (e: unknown) {
+    warn("session check failed; rendering as signed out", e);
+    return null;
+  } finally {
+    if (timer !== undefined) window.clearTimeout(timer);
+  }
 }
 
 export async function signOut(supabase: SupabaseClient<Database>) {
