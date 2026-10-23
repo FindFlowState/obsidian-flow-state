@@ -3,7 +3,7 @@ import type FlowStatePlugin from "./main";
 import type { Route } from "./types";
 import { DEFAULT_SUPABASE_URL, DEFAULT_SUPABASE_ANON_KEY } from "./config";
 import { openWelcomeScreenNow } from "./firstRun";
-import { getSupabase, getCurrentSession, signOut as supaSignOut, sendMagicLink, verifyEmailOtp, listObsidianRoutes, listRecentJobs, deleteRoute, fetchRouteById, fetchUserCredits } from "./supabase";
+import { getSupabase, loadSessionOrNull, signOut as supaSignOut, sendMagicLink, verifyEmailOtp, listObsidianRoutes, listRecentJobs, deleteRoute, fetchRouteById, fetchUserCredits } from "./supabase";
 import { formatRelativeTime } from "./time";
 import { GetAppModal } from "./getAppModal";
 import { openUploadModal } from "./uploadModal";
@@ -209,7 +209,9 @@ export class FlowStateSettingTab extends PluginSettingTab {
     void (async () => {
       try {
         const supabase = getSupabase(this.settings);
-        const session = await getCurrentSession(supabase);
+        // Never throws: a dead or uncheckable session renders as signed out,
+        // so the email field and Send code button below always appear.
+        const session = await loadSessionOrNull(supabase);
         // Bail out if a newer display() was called
         if (this.displayGeneration !== generation) return;
         const isSignedIn = !!session;
@@ -393,7 +395,7 @@ export class FlowStateSettingTab extends PluginSettingTab {
     void (async () => {
       try {
         const supabase = getSupabase(this.settings);
-        const session = await getCurrentSession(supabase);
+        const session = await loadSessionOrNull(supabase);
         // Bail out if a newer display() was called
         if (this.displayGeneration !== generation) return;
         if (!session) return; // not signed in
